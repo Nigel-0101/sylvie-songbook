@@ -143,12 +143,18 @@
     const frame=panels[index]?.querySelector('.picture-window'),img=frame?.querySelector('img');
     if(!img)return Promise.resolve();
     if(pictureJobs.has(index))return pictureJobs.get(index);
+    frame.dataset.imageState='pending';frame.querySelector('.picture-load-state').hidden=true;
     img.loading='eager';
     const job=img.decode().then(()=>{frame.dataset.imageState='ready';frame.querySelector('.picture-load-state').hidden=true;}).catch(()=>{
-      frame.dataset.imageState='error';frame.querySelector('.picture-load-state').textContent='画作暂未载入，点击重试';pictureJobs.delete(index);
+      if(img.complete&&img.naturalWidth){frame.dataset.imageState='ready';return;}
+      frame.dataset.imageState='error';frame.querySelector('.picture-load-state').hidden=false;pictureJobs.delete(index);
     });
     pictureJobs.set(index,job);return job;
   }
+  document.querySelectorAll('.picture-load-state').forEach(button=>button.addEventListener('click',()=>{
+    const frame=button.closest('.picture-window'),img=frame.querySelector('img');
+    img.src=img.src;preparePicture(Number(button.closest('[data-page]').dataset.page));
+  }));
   function prepareNearby(index){
     preparePicture(index).then(()=>{if(currentPage===index){preparePicture(index-1);preparePicture(index+1);}});
   }
@@ -229,29 +235,6 @@
   $('#replay').addEventListener('click',playOpening);
   goFable(readHash(),false);
   try{if(!sessionStorage.getItem('sylvie-fable-seen')&&readHash()===0)playOpening();sessionStorage.setItem('sylvie-fable-seen','1');}catch{}
-  let gallery=JSON.parse($('#gallery-data').textContent),lightboxIndex=0,lightboxReturn=null,artRequest=0;
-  const lightbox=$('#art-lightbox'),lightboxImg=$('#lightbox-img');
-  const artStatus=document.createElement('p');artStatus.className='art-load-state';artStatus.setAttribute('role','status');artStatus.hidden=true;
-  lightbox.querySelector('.lightbox-image').append(artStatus);
-  async function openArtwork(index){
-    lightboxIndex=(index+gallery.length)%gallery.length;
-    const item=gallery[lightboxIndex],request=++artRequest,selectedIndex=lightboxIndex;
-    artStatus.hidden=false;artStatus.textContent='正在载入「'+item.title+'」…';lightbox.setAttribute('aria-busy','true');
-    if(!lightbox.open){lightboxReturn=document.activeElement;lightbox.showModal();$('#close-lightbox').focus();}
-    const next=new Image();next.decoding='async';next.sizes='95vw';next.srcset=item.srcset;next.src='art/'+item.display;
-    try{await next.decode();}catch{if(request===artRequest){artStatus.textContent='画作暂未载入，可重试或打开原图';$('#original-image').href='art/'+item.file;lightbox.setAttribute('aria-busy','false');}return;}
-    if(request!==artRequest||!lightbox.open)return;
-    // Swap only decoded content. A slow previous request cannot replace a newer choice.
-    lightboxImg.sizes=next.sizes;lightboxImg.srcset=next.srcset;lightboxImg.src=next.src;lightboxImg.alt=item.alt;lightboxImg.hidden=false;
-    $('#lightbox-title').textContent=item.title;$('#original-image').href='art/'+item.file;
-    $('#lightbox-counter').textContent=String(selectedIndex+1).padStart(2,'0')+' / 05';artStatus.hidden=true;lightbox.setAttribute('aria-busy','false');
-  }
-  document.querySelectorAll('[data-open-art]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.imageState==='error'){preparePicture(Number(b.closest('[data-page]').dataset.page));return;}openArtwork(Number(b.dataset.openArt));}));
-  $('#lightbox-prev').addEventListener('click',()=>openArtwork(lightboxIndex-1));
-  $('#lightbox-next').addEventListener('click',()=>openArtwork(lightboxIndex+1));
-  $('#close-lightbox').addEventListener('click',()=>$('#art-lightbox').close());
-  $('#art-lightbox').addEventListener('close',()=>{artRequest++;artStatus.hidden=true;lightbox.removeAttribute('aria-busy');lightboxReturn?.focus({preventScroll:true});});
-  $('#art-lightbox').addEventListener('keydown',e=>{if(e.key==='ArrowLeft'){e.preventDefault();openArtwork(lightboxIndex-1);}if(e.key==='ArrowRight'){e.preventDefault();openArtwork(lightboxIndex+1);}});
   document.querySelectorAll('dialog .dialog-close').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();b.closest('dialog').close();}));
 
 })();
