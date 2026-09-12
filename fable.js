@@ -17,9 +17,10 @@
   function saveViewer(){try{localStorage.setItem(viewerKey,JSON.stringify({saved:[...saved],recent}));}catch{$('#storage-note').hidden=false;}}
   readViewer();
   const isNew=s=>Number.isFinite(s.createdAt)&&Date.now()>=s.createdAt&&Date.now()-s.createdAt<WEEK;
+  const songNumber=s=>String(songs.indexOf(s)+1).padStart(3,'0');
   function matches(){
     const query=search.value.trim().normalize('NFKC').toLocaleLowerCase();
-    const list=songs.filter(s=>!s.deletedAt&&(view!=='saved'||saved.has(String(s.id)))&&(view!=='recent'||recent.some(x=>x.id===String(s.id)))&&(view!=='new'||isNew(s))&&(!language||s.language===language)&&(!style||s.style===style)&&(!query||`${s.name} ${s.singer} ${s.id}`.normalize('NFKC').toLocaleLowerCase().includes(query)));
+    const list=songs.filter(s=>!s.deletedAt&&(view!=='saved'||saved.has(String(s.id)))&&(view!=='recent'||recent.some(x=>x.id===String(s.id)))&&(view!=='new'||isNew(s))&&(!language||s.language===language)&&(!style||s.style===style)&&(!query||`${s.name} ${s.singer} ${songNumber(s)}`.normalize('NFKC').toLocaleLowerCase().includes(query)));
     return list.sort((a,b)=>view==='recent'?recent.findIndex(x=>x.id===String(a.id))-recent.findIndex(x=>x.id===String(b.id)):Number(isNew(b))-Number(isNew(a))||(isNew(a)?b.createdAt-a.createdAt:(a.order??songs.indexOf(a))-(b.order??songs.indexOf(b))));
   }
   function make(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;}
@@ -29,11 +30,27 @@
     feedback.getAnimations?.().forEach(a=>a.cancel());
     if(!reduced.matches&&!document.body.classList.contains('static-mode'))feedback.animate([{transform:'translate(-50%,6px)',opacity:0},{transform:'translate(-50%,0)',opacity:1}],{duration:200,easing:'ease-out'});
   }
-  function recordChoice(song){selected=String(song.id);recent=[{id:String(song.id),at:Date.now()},...recent.filter(x=>x.id!==String(song.id))].slice(0,30);saveViewer();const index=matches().findIndex(s=>String(s.id)===selected);if(index>=0)page=Math.floor(index/pageSize);render();showSlip(song);const row=[...rows.children].find(r=>r.dataset.song===selected);row?.scrollIntoView({block:'nearest',behavior:reduced.matches||document.body.classList.contains('static-mode')?'instant':'smooth'});row?.querySelector('.select-song')?.focus({preventScroll:true});}
-  async function choose(song){
+  function recordChoice(song,notify=true){selected=String(song.id);recent=[{id:String(song.id),at:Date.now()},...recent.filter(x=>x.id!==String(song.id))].slice(0,30);saveViewer();const index=matches().findIndex(s=>String(s.id)===selected);if(index>=0)page=Math.floor(index/pageSize);render();if(notify)showSlip(song);else{feedback.hidden=true;clearTimeout(feedbackTimer);}const row=[...rows.children].find(r=>r.dataset.song===selected);row?.scrollIntoView({block:'nearest',behavior:reduced.matches||document.body.classList.contains('static-mode')?'instant':'smooth'});row?.querySelector('.select-song')?.focus({preventScroll:true});}
+  function legacyCopy(text){
+    const previous=document.activeElement,selection=window.getSelection(),ranges=[];
+    for(let i=0;i<(selection?.rangeCount||0);i++)ranges.push(selection.getRangeAt(i).cloneRange());
+    const field=document.createElement('textarea');field.value=text;field.readOnly=true;
+    field.style.cssText='position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;font-size:16px';
+    (document.querySelector('dialog[open]')||document.body).append(field);
+    let copied=false;
+    try{field.focus({preventScroll:true});field.select();field.setSelectionRange(0,text.length);copied=document.execCommand?.('copy')===true;}catch{}
+    finally{field.remove();previous?.focus?.({preventScroll:true});if(selection){selection.removeAllRanges();ranges.forEach(range=>selection.addRange(range));}}
+    return copied;
+  }
+  async function copyRequest(text){
+    // Invoke the browser API directly inside the click. Older / embedded browsers may need selection copying.
+    try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);return;}}catch{}
+    if(!legacyCopy(text))throw Error('Clipboard unavailable');
+  }
+  async function choose(song,notify=true){
     const text='点歌 '+song.name;
-    try{await navigator.clipboard.writeText(text);recordChoice(song);}
-    catch{$('#manual-copy-text').value=text;$('#manual-copy').showModal();$('#manual-copy-text').select();$('#manual-copy').dataset.song=String(song.id);}
+    try{await copyRequest(text);recordChoice(song,notify);}
+    catch{feedback.hidden=true;clearTimeout(feedbackTimer);$('#manual-copy-text').value=text;$('#manual-copy').dataset.song=String(song.id);$('#manual-copy').dataset.notify=String(notify);$('#manual-copy').showModal();$('#manual-copy-text').focus();$('#manual-copy-text').select();}
   }
   function render(){
     const result=matches();page=Math.max(0,Math.min(page,Math.ceil(result.length/pageSize)-1));
@@ -48,7 +65,7 @@
     $('#page-prev').disabled=page===0;$('#page-next').disabled=(page+1)*pageSize>=result.length;
     for(const song of result.slice(page*pageSize,(page+1)*pageSize)){
       const id=String(song.id),row=make('article','track'+(selected===id?' chosen':''));row.dataset.song=id;
-      const number=make('span','track-number num',String(songs.indexOf(song)+1).padStart(3,'0'));
+      const number=make('span','track-number num',songNumber(song));
       const names=make('div','track-names'),title=make('strong','',song.name);
       if(isNew(song))title.append(make('small','new-badge','NEW'));
       names.append(title,make('span','artist',song.singer));
@@ -104,8 +121,8 @@
   });
   $('#random').addEventListener('click',()=>{nextCandidate();if(candidate)$('#candidate').showModal();});
   $('#another').addEventListener('click',nextCandidate);
-  $('#choose-candidate').addEventListener('click',()=>{if(candidate){$('#candidate').close();choose(candidate);}});
-  $('#manual-copy-done').addEventListener('click',()=>{const song=songs.find(s=>String(s.id)===$('#manual-copy').dataset.song);$('#manual-copy').close();if(song)recordChoice(song);});
+  $('#choose-candidate').addEventListener('click',()=>{if(candidate){$('#candidate').close();choose(candidate,false);}});
+  $('#manual-copy-done').addEventListener('click',()=>{const song=songs.find(s=>String(s.id)===$('#manual-copy').dataset.song),notify=$('#manual-copy').dataset.notify!=='false';$('#manual-copy').close();if(song)recordChoice(song,notify);});
   window.addEventListener('storage',e=>{if(e.key===viewerKey){readViewer();render();}if(e.key===catalogKey)loadCatalog();});
   async function loadCatalog(){
     try{
