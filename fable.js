@@ -1,0 +1,240 @@
+(() => {
+  'use strict';
+  const $=s=>document.querySelector(s);
+  const mini=new URLSearchParams(location.search).get('mini')==='1';
+  document.body.classList.toggle('is-mini',mini);
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+  const rows=$('#rows'),search=$('#search'),feedback=$('#feedback');
+  const viewerKey='sylvie-songbook-viewer-v1',catalogKey='vv-songbook-preview-v1';
+  const WEEK=7*24*60*60*1000,pageSize=20;
+  const bookmark='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>';
+  let songs=[],selected=null,view='all',language='',style='',candidate=null,page=0,feedbackTimer,candidateTurn=0;
+  let media=[],recent=[];
+  const saved=new Set();
+  function readViewer(){
+    try{const data=JSON.parse(localStorage.getItem(viewerKey)||'{}');saved.clear();(Array.isArray(data.saved)?data.saved:[]).forEach(id=>saved.add(String(id)));recent=(Array.isArray(data.recent)?data.recent:[]).filter(x=>x&&typeof x.id==='string').slice(0,30);}catch{/* Storage is optional; the catalogue remains usable. */}
+  }
+  function saveViewer(){try{localStorage.setItem(viewerKey,JSON.stringify({saved:[...saved],recent}));}catch{$('#storage-note').hidden=false;}}
+  readViewer();
+  const isNew=s=>Number.isFinite(s.createdAt)&&Date.now()>=s.createdAt&&Date.now()-s.createdAt<WEEK;
+  function matches(){
+    const query=search.value.trim().normalize('NFKC').toLocaleLowerCase();
+    const list=songs.filter(s=>!s.deletedAt&&(view!=='saved'||saved.has(String(s.id)))&&(view!=='recent'||recent.some(x=>x.id===String(s.id)))&&(view!=='new'||isNew(s))&&(!language||s.language===language)&&(!style||s.style===style)&&(!query||`${s.name} ${s.singer} ${s.id}`.normalize('NFKC').toLocaleLowerCase().includes(query)));
+    return list.sort((a,b)=>view==='recent'?recent.findIndex(x=>x.id===String(a.id))-recent.findIndex(x=>x.id===String(b.id)):Number(isNew(b))-Number(isNew(a))||(isNew(a)?b.createdAt-a.createdAt:(a.order??songs.indexOf(a))-(b.order??songs.indexOf(b))));
+  }
+  function make(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;}
+  function showSlip(song){
+    $('#feedback-text').textContent='点歌 '+song.name;feedback.dataset.long=String(song.name.length>30);feedback.hidden=false;
+    clearTimeout(feedbackTimer);feedbackTimer=setTimeout(()=>{feedback.hidden=true;},6200);
+    feedback.getAnimations?.().forEach(a=>a.cancel());
+    if(!reduced.matches&&!document.body.classList.contains('static-mode'))feedback.animate([{transform:'translate(-50%,6px)',opacity:0},{transform:'translate(-50%,0)',opacity:1}],{duration:200,easing:'ease-out'});
+  }
+  function recordChoice(song){selected=String(song.id);recent=[{id:String(song.id),at:Date.now()},...recent.filter(x=>x.id!==String(song.id))].slice(0,30);saveViewer();const index=matches().findIndex(s=>String(s.id)===selected);if(index>=0)page=Math.floor(index/pageSize);render();showSlip(song);const row=[...rows.children].find(r=>r.dataset.song===selected);row?.scrollIntoView({block:'nearest',behavior:reduced.matches||document.body.classList.contains('static-mode')?'instant':'smooth'});row?.querySelector('.select-song')?.focus({preventScroll:true});}
+  async function choose(song){
+    const text='点歌 '+song.name;
+    try{await navigator.clipboard.writeText(text);recordChoice(song);}
+    catch{$('#manual-copy-text').value=text;$('#manual-copy').showModal();$('#manual-copy-text').select();$('#manual-copy').dataset.song=String(song.id);}
+  }
+  function render(){
+    const result=matches();page=Math.max(0,Math.min(page,Math.ceil(result.length/pageSize)-1));
+    rows.replaceChildren();$('#result-count').textContent=`${result.length} 首`;
+    const available=songs.filter(s=>!s.deletedAt),ids=new Set(available.map(s=>String(s.id)));
+    $('#saved-count').textContent=available.filter(s=>saved.has(String(s.id))).length;$('#recent-count').textContent=recent.filter(x=>ids.has(x.id)).length;$('#new-count').textContent=available.filter(isNew).length;
+    $('#random').disabled=!result.length;$('#empty').hidden=!!result.length;
+    $('#clear-recent').hidden=view!=='recent'||!recent.length;
+    $('#empty-message').textContent=view==='saved'?'点亮歌曲旁的书签，把喜欢的歌留在这里。':view==='recent'?'选歌后会自动保留最近记录。':'试试清空搜索，或减少筛选条件。';
+    $('#pagination').hidden=result.length<=pageSize;
+    $('#page-count').textContent=`${page+1} / ${Math.max(1,Math.ceil(result.length/pageSize))}`;
+    $('#page-prev').disabled=page===0;$('#page-next').disabled=(page+1)*pageSize>=result.length;
+    for(const song of result.slice(page*pageSize,(page+1)*pageSize)){
+      const id=String(song.id),row=make('article','track'+(selected===id?' chosen':''));row.dataset.song=id;
+      const number=make('span','track-number num',String(songs.indexOf(song)+1).padStart(3,'0'));
+      const names=make('div','track-names'),title=make('strong','',song.name);
+      if(isNew(song))title.append(make('small','new-badge','NEW'));
+      names.append(title,make('span','artist',song.singer));
+      const clip=media.find(m=>m.songName===song.name);
+      if(clip){const preview=make('a','song-preview','看演唱 ↗');preview.href=clip.url;preview.target='_blank';preview.rel='noreferrer';names.append(preview);}
+      const favorite=make('button','favorite');favorite.type='button';favorite.innerHTML=bookmark;
+      favorite.setAttribute('aria-pressed',String(saved.has(id)));favorite.setAttribute('aria-label',(saved.has(id)?'取消收藏 ':'收藏 ')+song.name);
+      favorite.addEventListener('click',()=>{saved.has(id)?saved.delete(id):saved.add(id);saveViewer();render();const target=[...rows.querySelectorAll('.track')].find(e=>e.dataset.song===id)?.querySelector('.favorite')||$('[data-view="'+view+'"]');target?.focus({preventScroll:true});});
+      const select=make('button','select-song',selected===id?'已选':'点歌');select.type='button';select.setAttribute('aria-label','复制点歌 '+song.name);select.addEventListener('click',()=>choose(song));
+      row.append(number,names,favorite,select);rows.append(row);
+    }
+    document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
+  }
+  function updateFilters(){
+    document.querySelectorAll('[data-field]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.field==='language'?language:style)===b.dataset.value)));
+    $('#filter-label').textContent=language||style?[language,style].filter(Boolean).join(' · '):'筛选';
+  }
+  function setupFilters(){
+    for(const field of ['language','style']){
+      const target=$('#'+field+'-choices');target.replaceChildren();
+      for(const value of ['',...new Set(songs.filter(s=>!s.deletedAt).map(s=>s[field]).filter(Boolean))]){
+        const b=make('button','',value||'全部');b.type='button';b.dataset.field=field;b.dataset.value=value;
+        b.addEventListener('click',()=>{if(field==='language')language=value;else style=value;page=0;updateFilters();render();});target.append(b);
+      }
+    }updateFilters();
+  }
+  function reset(){search.value='';language='';style='';view='all';page=0;updateFilters();render();}
+  function nextCandidate(){
+    const eligible=matches(),alternatives=eligible.filter(s=>String(s.id)!==String(candidate?.id));
+    const pool=alternatives.length?alternatives:eligible;if(!pool.length)return;
+    $('#another').disabled=eligible.length<2;
+    candidate=pool[Math.floor(Math.random()*pool.length)];candidateTurn++;
+    $('#candidate-name').textContent=candidate.name;$('#candidate-singer').textContent=candidate.singer;
+    $('#candidate-number').textContent='候选 '+String(candidateTurn).padStart(2,'0');
+    for(const id of ['candidate-name','candidate-singer','candidate-number']){
+      const text=$('#'+id);text.getAnimations?.().forEach(a=>a.cancel());
+      if(!reduced.matches&&!document.body.classList.contains('static-mode'))text.animate([{transform:'translateY(5px)',opacity:.25},{transform:'translateY(0)',opacity:1}],{duration:200,easing:'ease-out'});
+    }
+  }
+  search.addEventListener('input',()=>{page=0;render();});
+  search.addEventListener('keydown',e=>{if(e.key==='Escape'){search.value='';page=0;render();}});
+  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;page=0;render();}));
+  $('#reset').addEventListener('click',reset);
+  $('#reset-filter').addEventListener('click',()=>{language='';style='';page=0;updateFilters();render();});
+  $('#dismiss-feedback').addEventListener('click',()=>{feedback.hidden=true;clearTimeout(feedbackTimer);});
+  $('#clear-recent').addEventListener('click',()=>{recent=[];saveViewer();page=0;render();});
+  $('#page-prev').addEventListener('click',()=>{page--;render();$('#catalog').scrollIntoView({block:'start'});});
+  $('#page-next').addEventListener('click',()=>{page++;render();$('#catalog').scrollIntoView({block:'start'});});
+  document.addEventListener('pointerdown',e=>{if(!$('.filter').contains(e.target))$('.filter').open=false;});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&$('.filter').open){$('.filter').open=false;$('.filter summary').focus();}
+    if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.target.closest('input,textarea,[contenteditable="true"]')&&!document.querySelector('dialog[open]')){e.preventDefault();if(horizontal)goChapter(1,false);if(theme==='atlas')goAtlas(2,false);if(theme==='fable')goFable(5,false);search.focus();}
+  });
+  $('#random').addEventListener('click',()=>{nextCandidate();if(candidate)$('#candidate').showModal();});
+  $('#another').addEventListener('click',nextCandidate);
+  $('#choose-candidate').addEventListener('click',()=>{if(candidate){$('#candidate').close();choose(candidate);}});
+  $('#manual-copy-done').addEventListener('click',()=>{const song=songs.find(s=>String(s.id)===$('#manual-copy').dataset.song);$('#manual-copy').close();if(song)recordChoice(song);});
+  window.addEventListener('storage',e=>{if(e.key===viewerKey){readViewer();render();}if(e.key===catalogKey)loadCatalog();});
+  async function loadCatalog(){
+    try{
+      let data=null;try{const stored=localStorage.getItem(catalogKey);if(stored)data=JSON.parse(stored);}catch{/* Read the source catalogue even if storage is blocked or malformed. */}
+      if(!Array.isArray(data))data=await fetch('./songs.json').then(r=>{if(!r.ok)throw Error();return r.json();});
+      if(!Array.isArray(data))throw Error();songs=data;setupFilters();render();
+    }catch{$('#empty').hidden=false;$('#empty-message').textContent='歌单暂时无法读取，请刷新页面。';$('#random').disabled=true;}
+  }
+  fetch('submissions.json').then(r=>r.json()).then(data=>{media=data;if(songs.length)render();}).catch(()=>{});
+  loadCatalog();
+  const theme='fable',horizontal=false;
+  const rail=$('#fable-rail'),panels=[...document.querySelectorAll('[data-page]')];
+  let currentPage=0,scrollFrame=0,wheelSum=0,lastWheel=0,wheelLock=0,quietPreference=false;
+  const running=new Set();
+  const quiet=()=>reduced.matches||quietPreference;
+  const pictureJobs=new Map();
+  function preparePicture(index){
+    const frame=panels[index]?.querySelector('.picture-window'),img=frame?.querySelector('img');
+    if(!img)return Promise.resolve();
+    if(pictureJobs.has(index))return pictureJobs.get(index);
+    img.loading='eager';
+    const job=img.decode().then(()=>{frame.dataset.imageState='ready';frame.querySelector('.picture-load-state').hidden=true;}).catch(()=>{
+      frame.dataset.imageState='error';frame.querySelector('.picture-load-state').textContent='画作暂未载入，点击重试';pictureJobs.delete(index);
+    });
+    pictureJobs.set(index,job);return job;
+  }
+  function prepareNearby(index){
+    preparePicture(index).then(()=>{if(currentPage===index){preparePicture(index-1);preparePicture(index+1);}});
+  }
+  try{quietPreference=localStorage.getItem('sylvie-reduced-motion')==='true';}catch{}
+  function applyMotionPreference(){
+    document.body.classList.toggle('static-mode',quiet());
+    $('#motion-toggle').setAttribute('aria-pressed',String(quiet()));
+    if(quiet())for(const a of running){try{a.finish();}catch{}a.cancel();}
+    if(quiet())document.querySelectorAll('#feedback,#candidate-content>*').forEach(el=>el.getAnimations?.().forEach(a=>a.cancel()));
+  }
+  function animatePart(el,frames,options){
+    if(!el||quiet())return;
+    const a=el.animate(frames,{duration:850,easing:'cubic-bezier(.18,.75,.24,1)',...options});
+    running.add(a);a.finished.then(()=>running.delete(a),()=>running.delete(a));return a;
+  }
+  function syncRail(){
+    const width=rail.clientWidth||innerWidth;
+    const previousPage=currentPage;
+    currentPage=Math.max(0,Math.min(panels.length-1,Math.round(rail.scrollLeft/width)));
+    if(previousPage!==currentPage)prepareNearby(currentPage);
+    document.body.dataset.currentPage=String(currentPage);
+    panels.forEach((p,i)=>p.inert=i!==currentPage);
+    document.querySelectorAll('.chapter-links [data-fable-go]').forEach(b=>{
+      const index=Number(b.dataset.fableGo);
+      b.setAttribute('aria-pressed',String(index===currentPage||(index===1&&currentPage>1&&currentPage<5)));
+    });
+    $('#fable-position').textContent=String(currentPage+1).padStart(2,'0')+' / 07';
+    $('#fable-prev').disabled=currentPage===0;$('#fable-next').disabled=currentPage===panels.length-1;
+    $('#fable-progress').style.width=((rail.scrollLeft/width+1)/panels.length*100)+'%';
+    // Environment and principal picture move together. There is no long empty scroll range.
+    $('.world-scene').style.transform=quiet()?'none':`translate3d(${-rail.scrollLeft/width*.3}vw,0,0)`;
+    scrollFrame=0;
+  }
+  function goFable(index,animate=true){
+    index=Math.max(0,Math.min(panels.length-1,index));
+    currentPage=index;wheelSum=0;
+    prepareNearby(index);
+    rail.scrollTo({left:index*(rail.clientWidth||innerWidth),behavior:animate&&!quiet()?'smooth':'instant'});
+    if(!animate||quiet())syncRail();
+    history.replaceState(null,'',index===5?'#catalog':'#chapter-'+index);
+  }
+  function readHash(){return location.hash==='#catalog'?5:Number(location.hash.replace('#chapter-',''))||0;}
+  document.querySelectorAll('[data-fable-go]').forEach(b=>b.addEventListener('click',()=>goFable(Number(b.dataset.fableGo))));
+  document.querySelectorAll('a[href="#catalog"],a[href="#chapter-0"]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();goFable(a.hash==='#catalog'?5:0);if(a.classList.contains('skip-link'))$('#search').focus({preventScroll:true});}));
+  $('#fable-prev').addEventListener('click',()=>goFable(currentPage-1));
+  $('#fable-next').addEventListener('click',()=>goFable(currentPage+1));
+  rail.addEventListener('scroll',()=>{if(!scrollFrame)scrollFrame=requestAnimationFrame(syncRail);},{passive:true});
+  rail.addEventListener('scrollend',()=>{syncRail();history.replaceState(null,'',currentPage===5?'#catalog':'#chapter-'+currentPage);});
+  rail.addEventListener('wheel',e=>{
+    if(e.ctrlKey||e.target.closest('[data-inner-scroll],input,textarea,dialog,.filter-pop')||Math.abs(e.deltaX)>Math.abs(e.deltaY))return;
+    e.preventDefault();const now=performance.now();if(now<wheelLock)return;
+    const delta=e.deltaY*(e.deltaMode===1?20:e.deltaMode===2?rail.clientWidth:1);
+    if(now-lastWheel>550||Math.sign(delta)!==Math.sign(wheelSum))wheelSum=0;
+    lastWheel=now;wheelSum+=delta;
+    if(Math.abs(wheelSum)>=170){const direction=Math.sign(wheelSum);wheelSum=0;wheelLock=now+(quiet()?160:650);goFable(currentPage+direction);}
+  },{passive:false});
+  document.addEventListener('keydown',e=>{
+    if(e.target.closest('input,textarea,select,[contenteditable=true]')||document.querySelector('dialog[open]'))return;
+    if(e.key==='ArrowRight'){e.preventDefault();goFable(currentPage+1);}
+    if(e.key==='ArrowLeft'){e.preventDefault();goFable(currentPage-1);}
+    if(e.key==='Home'&&e.target.closest('.fable-dock')){e.preventDefault();goFable(0);}
+    if(e.key==='End'&&e.target.closest('.fable-dock')){e.preventDefault();goFable(6);}
+  });
+  let resizeTimer;
+  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>goFable(currentPage,false),100);},{passive:true});
+  window.addEventListener('hashchange',()=>goFable(readHash()));
+  $('#motion-toggle').addEventListener('click',()=>{quietPreference=!quietPreference;try{localStorage.setItem('sylvie-reduced-motion',String(quietPreference));}catch{}applyMotionPreference();});
+  reduced.addEventListener('change',applyMotionPreference);applyMotionPreference();
+  let openingRequest=0;
+  async function playOpening(){
+    const request=++openingRequest;
+    for(const a of running)a.cancel();
+    goFable(0,false);await preparePicture(0);if(quiet()||currentPage!==0||request!==openingRequest)return;
+    animatePart($('.cover-page .picture-window'),[{transform:'translateY(8px)',opacity:.7},{transform:'translateY(0)',opacity:1}],{duration:320});
+    animatePart($('.cover-identity'),[{transform:'translateY(4px)',opacity:.5},{transform:'translateY(0)',opacity:1}],{duration:240});
+    animatePart($('.cover-page .picture-footer'),[{transform:'translateY(4px)',opacity:.5},{transform:'translateY(0)',opacity:1}],{duration:240});
+  }
+  $('#replay').addEventListener('click',playOpening);
+  goFable(readHash(),false);
+  try{if(!sessionStorage.getItem('sylvie-fable-seen')&&readHash()===0)playOpening();sessionStorage.setItem('sylvie-fable-seen','1');}catch{}
+  let gallery=JSON.parse($('#gallery-data').textContent),lightboxIndex=0,lightboxReturn=null,artRequest=0;
+  const lightbox=$('#art-lightbox'),lightboxImg=$('#lightbox-img');
+  const artStatus=document.createElement('p');artStatus.className='art-load-state';artStatus.setAttribute('role','status');artStatus.hidden=true;
+  lightbox.querySelector('.lightbox-image').append(artStatus);
+  async function openArtwork(index){
+    lightboxIndex=(index+gallery.length)%gallery.length;
+    const item=gallery[lightboxIndex],request=++artRequest,selectedIndex=lightboxIndex;
+    artStatus.hidden=false;artStatus.textContent='正在载入「'+item.title+'」…';lightbox.setAttribute('aria-busy','true');
+    if(!lightbox.open){lightboxReturn=document.activeElement;lightbox.showModal();$('#close-lightbox').focus();}
+    const next=new Image();next.decoding='async';next.sizes='95vw';next.srcset=item.srcset;next.src='art/'+item.display;
+    try{await next.decode();}catch{if(request===artRequest){artStatus.textContent='画作暂未载入，可重试或打开原图';$('#original-image').href='art/'+item.file;lightbox.setAttribute('aria-busy','false');}return;}
+    if(request!==artRequest||!lightbox.open)return;
+    // Swap only decoded content. A slow previous request cannot replace a newer choice.
+    lightboxImg.sizes=next.sizes;lightboxImg.srcset=next.srcset;lightboxImg.src=next.src;lightboxImg.alt=item.alt;lightboxImg.hidden=false;
+    $('#lightbox-title').textContent=item.title;$('#original-image').href='art/'+item.file;
+    $('#lightbox-counter').textContent=String(selectedIndex+1).padStart(2,'0')+' / 05';artStatus.hidden=true;lightbox.setAttribute('aria-busy','false');
+  }
+  document.querySelectorAll('[data-open-art]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.imageState==='error'){preparePicture(Number(b.closest('[data-page]').dataset.page));return;}openArtwork(Number(b.dataset.openArt));}));
+  $('#lightbox-prev').addEventListener('click',()=>openArtwork(lightboxIndex-1));
+  $('#lightbox-next').addEventListener('click',()=>openArtwork(lightboxIndex+1));
+  $('#close-lightbox').addEventListener('click',()=>$('#art-lightbox').close());
+  $('#art-lightbox').addEventListener('close',()=>{artRequest++;artStatus.hidden=true;lightbox.removeAttribute('aria-busy');lightboxReturn?.focus({preventScroll:true});});
+  $('#art-lightbox').addEventListener('keydown',e=>{if(e.key==='ArrowLeft'){e.preventDefault();openArtwork(lightboxIndex-1);}if(e.key==='ArrowRight'){e.preventDefault();openArtwork(lightboxIndex+1);}});
+  document.querySelectorAll('dialog .dialog-close').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();b.closest('dialog').close();}));
+
+})();

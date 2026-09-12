@@ -1,0 +1,20 @@
+/* Raster jade is the ornament. UI text stays live, selectable and legible. */
+.pair-avatar{display:block;position:relative;width:156px;height:156px;min-height:0;padding:5px;border:1px solid #7b9b92;border-radius:50%;background:#e4f1e5;box-shadow:0 9px 26px #123c4826;flex-shrink:0}
+.pair-avatar-image{display:block;width:100%;height:100%;border-radius:50%;background-image:url('art/sea-landscape-display-1600.webp');background-size:355.56% auto;background-position:70.65% 11%;transition:transform .45s cubic-bezier(.2,.75,.3,1)}
+.pair-avatar:hover .pair-avatar-image{transform:rotate(-3deg)}
+.song-side>.pair-avatar{margin:22px auto}
+#feedback.jade-slip{position:fixed;left:50%;bottom:88px;z-index:100;transform:translateX(-50%);width:min(340px,calc(100vw - 40px));height:auto;min-height:0;aspect-ratio:4/1;display:flex;align-items:center;justify-content:center;padding:0;border:1px solid #a3bbb0;border-radius:10px;background:#d5e9df url('art/request-tag-v5-display.webp') center/100% 100% no-repeat;color:#23483f;box-shadow:0 8px 20px #072c3426,0 1px 4px #eaf5e35c;overflow:visible;gap:0}
+#feedback.jade-slip::before,#feedback.jade-slip::after{display:none}
+#feedback.jade-slip #feedback-text{position:absolute;left:14%;right:14%;top:17%;bottom:17%;display:flex;align-items:center;align-items:safe center;justify-content:center;text-align:center;font:600 16px/1.45 var(--serif,'Study Serif',serif);letter-spacing:.015em;overflow-wrap:anywhere;text-shadow:0 1px #effbec;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#feedback.jade-slip[data-long=true] #feedback-text{font-size:14px;line-height:1.45;letter-spacing:0}
+#feedback.jade-slip #dismiss-feedback{position:absolute;right:5px;top:5px;width:24px;height:24px;min-height:24px;padding:0;display:grid;place-items:center;border-radius:50%;border:0;background:transparent;color:#46675d;font:400 17px/1 Arial,sans-serif;box-shadow:none}
+#feedback.jade-slip #dismiss-feedback:hover{background:#edf5e9b3;color:#23483f}
+#feedback.jade-slip .slip-seal{display:none}
+@media(max-width:680px){.pair-avatar{width:114px;height:114px}#feedback.jade-slip{width:min(300px,calc(100vw - 40px));bottom:80px;border-radius:9px}#feedback.jade-slip #feedback-text{font-size:15px;line-height:1.45;letter-spacing:0}#feedback.jade-slip[data-long=true] #feedback-text{font-size:13px}.song-side>.pair-avatar{margin:15px auto}}
+@media(prefers-reduced-motion:reduce){.pair-avatar-image{transition:none}}
+/* Dark mineral ink stays distinct from the jade background and its veins. */
+#feedback.jade-slip{color:#25231f}
+#feedback.jade-slip #feedback-text{color:#25231f;text-shadow:none;font-weight:600}
+#feedback.jade-slip #dismiss-feedback{color:#343a30}
+#candidate #candidate-name{color:#25231f;font-weight:600;text-shadow:none}
+#candidate #candidate-number,#candidate #candidate-singer{color:#394034;font-weight:500;text-shadow:none}
