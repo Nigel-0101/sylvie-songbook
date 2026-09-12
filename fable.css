@@ -16,10 +16,6 @@ dialog{border:1px solid #adc3ae;border-radius:22px 6px;color:var(--ink);backgrou
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.fable-rail{scroll-behavior:auto}}
 @media(max-width:800px){#candidate-content{padding:8px 20%;overflow:hidden}#candidate-name{min-height:0;max-height:2.8em;font-size:15px;line-height:1.4;flex-shrink:1}#candidate-number{line-height:1.35;margin-bottom:2px;flex-shrink:0}#candidate-singer{line-height:1.4;max-height:2.8em;overflow:auto;margin-top:3px;flex-shrink:0}}
 @media(max-height:540px){.picture-page{grid-template-rows:48px minmax(0,1fr) 55px;padding-top:4px;padding-bottom:4px}.cover-identity h1{font-size:27px}.cover-identity>p{display:none}.art-heading h2{font-size:25px}.picture-figure{width:min(78vw,calc((100dvh - 232px)*var(--art-ratio)))}.picture-footer{flex-wrap:nowrap;gap:16px}.picture-footer .live-cluster{flex-basis:auto;padding:4px 10px}.picture-footer .social-pair{gap:10px}.picture-footer .live-time small{display:none}.picture-footer .turn-page{min-width:135px;font-size:13px}.picture-footer .art-thumbnails{width:auto}.art-thumbnails button{width:47px}.reading-page,.films-page{padding-top:10px;padding-bottom:10px}.reading-leaf .pair-avatar{width:60px;height:60px}.leaf-title{margin:12px 0}.leaf-title h2{font-size:28px}.reading-leaf .live-time strong{font-size:14px}.reading-leaf .social-pair{margin-top:6px;padding-top:6px}.leaf-return{padding-top:10px}#candidate{max-width:580px}#candidate-content{max-height:165px}#candidate>h2{margin-bottom:9px;font-size:21px}.candidate-actions{padding-top:10px}#feedback.jade-slip{max-width:510px;bottom:72px}}
-
-
-
-
 /* Cloud v6: packed picture spreads and continuous illustrated reading leaf. */
 .world-scene{inset:-14px -3vw;background-position:45% center;filter:blur(3px);will-change:transform}
 .picture-page{--picture-width:min(82vw,1500px,calc((100dvh - 370px)*var(--art-ratio)));grid-template-rows:auto auto auto;align-content:center;row-gap:12px;padding:22px 5vw}
