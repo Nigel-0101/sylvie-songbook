@@ -137,3 +137,21 @@ button .ui-icon{pointer-events:none}
 .film-pagination button:disabled{opacity:.4;cursor:default}.film-pagination>span{font-size:13px}.film-empty{grid-column:1/-1;padding:40px 0;color:#5b716e}
 .film-review-link{display:block;width:fit-content;margin:22px auto 0;font-size:12px;color:#607773;text-underline-offset:4px}
 @media(max-width:800px){.film-toolbar{gap:12px}.film-categories{flex-basis:100%;gap:4px}.film-categories button{font-size:12px;padding:7px 9px}.film-search{width:100%}.film-search input{width:100%}.submission-section .submission h3{font-size:23px}.film-pagination{gap:16px}.films-sheet{padding-inline:18px}.submission-section>header{align-items:center}}
+
+/* Full-screen water entry: one fixed stage, one playback clock. */
+.water-opening{position:fixed;inset:0;z-index:11000;overflow:hidden;isolation:isolate;pointer-events:auto}
+.opening-paper{position:absolute;inset:0;background:linear-gradient(90deg,rgba(231,237,227,.91),rgba(237,242,232,.86)),url('art/reading-leaf-v6-display.webp') 50% 47%/cover;z-index:2}
+.opening-paper canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.opening-paper canvas[hidden],.opening-wave[hidden]{display:none}
+.opening-inscription{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:34px;color:#294b50;opacity:0}
+.opening-inscription>span{writing-mode:vertical-rl;font:500 clamp(44px,4vw,66px)/1.55 var(--serif);letter-spacing:.24em}
+.opening-inscription small{writing-mode:vertical-rl;font:400 clamp(12px,1vw,15px)/1.8 var(--serif);letter-spacing:.2em;color:#8b5549}
+.opening-art-shell{position:absolute;inset:0 auto auto 0;width:100%;height:100%;opacity:0;overflow:hidden;z-index:1;background:#193d49;will-change:width,height,left,top}
+.opening-art-shell img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
+.opening-skip{position:absolute;z-index:4;right:max(24px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));min-height:44px;padding:10px 15px;border:1px solid #78999060;background:#ecf1e5b8;border-radius:3px;color:#355753;font-size:12px;letter-spacing:.08em}
+.opening-skip:hover{background:#f2f5ea}.opening-skip:focus-visible{outline:2px solid #315b68;outline-offset:4px}
+.opening-wave{position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-50%);border-radius:50%;opacity:0;border:1px solid #547f855c;box-shadow:0 0 10px 3px #f9fff580,inset 0 0 12px 1px #5b889833;pointer-events:none}
+body.is-opening .cover-page .picture-window{visibility:hidden}
+body.is-opening .fable-top,body.is-opening .fable-dock,body.is-opening .cover-page .picture-header,body.is-opening .cover-page .picture-footer{opacity:0}
+@media(max-width:800px){.opening-inscription{gap:23px}.opening-inscription>span{font-size:42px}.opening-inscription small{font-size:12px}.opening-skip{right:18px;bottom:max(18px,env(safe-area-inset-bottom))}}
+@media(prefers-reduced-motion:reduce){.water-opening{display:none}}

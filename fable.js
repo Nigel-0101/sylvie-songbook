@@ -168,13 +168,13 @@
   window.addEventListener('focus',()=>{if(Date.now()-lastCloudRefresh>15000)refreshCloudCatalog();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-lastCloudRefresh>15000)refreshCloudCatalog();});
   if(cloudEndpoint)setInterval(()=>{if(document.visibilityState==='visible')refreshCloudCatalog();},60000);
-  fetch('submissions.json').then(r=>r.json()).then(data=>{media=data;if(songs.length)render();if(typeof renderFilmGallery==='function')renderFilmGallery(data);}).catch(()=>{});
+  fetch('submissions.json?v=62d735294f0a').then(r=>r.json()).then(data=>{media=data;if(songs.length)render();if(typeof renderFilmGallery==='function')renderFilmGallery(data);}).catch(()=>{});
   loadCatalog();
   function renderFilmGallery(clips){
     const section=document.querySelector('.submission-section'),grid=section?.querySelector('.submission-grid');
     if(!grid||!Array.isArray(clips))return;
     let genre='全部',filmPage=0,query='';const perPage=12;
-    const categories=['全部','原创','翻唱','合唱','现场与片段','形象与纪念','趣味切片'];
+    const categories=['全部','原创','翻唱','合唱','形象与纪念'];
     const toolbar=make('div','film-toolbar'),nav=make('nav','film-categories');nav.setAttribute('aria-label','声映集分类');
     const searchLabel=make('label','film-search'),input=make('input');input.type='search';input.placeholder='搜索作品或版本';input.setAttribute('aria-label','搜索声映集作品或版本');
     const searchIcon=make('span','ui-icon');searchIcon.dataset.icon='magnifying-glass';searchIcon.setAttribute('aria-hidden','true');searchLabel.append(searchIcon,input);
@@ -206,16 +206,117 @@
     function turn(amount){filmPage+=amount;draw();section.closest('[data-inner-scroll]')?.scrollTo({top:toolbar.offsetTop-24,behavior:'instant'});(amount>0?(next.disabled?prev:next):(prev.disabled?next:prev)).focus({preventScroll:true})}
     prev.onclick=()=>turn(-1);next.onclick=()=>turn(1);draw();
   }
+  // One playback clock drives the inscription, water, illustration and its final rectangle.
+  function createOpeningWater(canvas,paper,width,height){
+    const gl=canvas.getContext('webgl',{alpha:false,antialias:false,depth:false,stencil:false,powerPreference:'low-power'});
+    if(!gl)return null;
+    const shaders=[],textures=[];let program,buffer;
+    function dispose(){
+      for(const texture of textures)gl.deleteTexture(texture);
+      for(const shader of shaders)gl.deleteShader(shader);
+      if(buffer)gl.deleteBuffer(buffer);if(program)gl.deleteProgram(program);
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+    }
+    try{
+      const scale=Math.min(devicePixelRatio||1,1.5,1920/width);
+      canvas.width=Math.round(width*scale);canvas.height=Math.round(height*scale);
+      const surface=document.createElement('canvas');surface.width=canvas.width;surface.height=canvas.height;
+      const ctx=surface.getContext('2d');if(!ctx)throw Error('No canvas');
+      const fit=Math.max(surface.width/paper.naturalWidth,surface.height/paper.naturalHeight);
+      ctx.drawImage(paper,(surface.width-paper.naturalWidth*fit)/2,(surface.height-paper.naturalHeight*fit)*.47,paper.naturalWidth*fit,paper.naturalHeight*fit);
+      const wash=ctx.createLinearGradient(0,0,surface.width,0);wash.addColorStop(0,'rgba(231,237,227,.91)');wash.addColorStop(1,'rgba(237,242,232,.86)');ctx.fillStyle=wash;ctx.fillRect(0,0,surface.width,surface.height);
+      function compile(type,source){const shader=gl.createShader(type);shaders.push(shader);gl.shaderSource(shader,source);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw Error('Water shader');return shader}
+      const vertex=compile(gl.VERTEX_SHADER,'attribute vec2 point;varying vec2 uv;void main(){uv=point*.5+.5;gl_Position=vec4(point,0.,1.);}');
+      const fragment=compile(gl.FRAGMENT_SHADER,`precision mediump float;
+        varying vec2 uv;uniform sampler2D paper;uniform vec2 size;uniform float progress;
+        void main(){
+          vec2 aspect=size/min(size.x,size.y);vec2 p=(uv-.5)*aspect;
+          float radius=length(p);float reach=length(aspect*.5)+.19;
+          float front=progress*reach;float d=radius-front;
+          float fade=smoothstep(0.,.1,progress)*(1.-smoothstep(.78,1.,progress));
+          float leading=exp(-pow(d/.055,2.));float trailing=exp(-pow((d+.115)/.085,2.));
+          float wave=(sin(d*96.)*leading+.38*sin((d+.115)*77.)*trailing)*fade;
+          vec2 direction=p/max(radius,.001);vec2 displaced=uv+direction*wave*.007/aspect;
+          vec3 color=texture2D(paper,clamp(displaced,.001,.999)).rgb;
+          color+=vec3(.038,.043,.039)*wave;
+          gl_FragColor=vec4(color,1.);
+        }`);
+      program=gl.createProgram();gl.attachShader(program,vertex);gl.attachShader(program,fragment);gl.linkProgram(program);
+      if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('Water program');
+      gl.useProgram(program);buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+      const point=gl.getAttribLocation(program,'point');gl.enableVertexAttribArray(point);gl.vertexAttribPointer(point,2,gl.FLOAT,false,0,0);
+      const texture=gl.createTexture();textures.push(texture);gl.bindTexture(gl.TEXTURE_2D,texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,surface);
+      gl.uniform2f(gl.getUniformLocation(program,'size'),width,height);gl.uniform1i(gl.getUniformLocation(program,'paper'),0);
+      const progress=gl.getUniformLocation(program,'progress');gl.viewport(0,0,canvas.width,canvas.height);
+      function draw(value){if(gl.isContextLost())return false;gl.uniform1f(progress,value);gl.drawArrays(gl.TRIANGLES,0,6);return true}
+      draw(0);return {draw,dispose};
+    }catch{dispose();return null}
+  }
+
+  async function startWaterOpening(frame,request){
+    const layer=document.createElement('div');layer.className='water-opening';
+    layer.innerHTML='<div class="opening-paper" aria-hidden="true"><canvas></canvas><div class="opening-inscription"><span>初见</span><small>与君相逢 · 听此一曲</small></div><i class="opening-wave"></i><i class="opening-wave second"></i></div><div class="opening-art-shell" aria-hidden="true"></div><button class="opening-skip" type="button">跳过开场</button>';
+    openingLayer=layer;document.body.append(layer);document.body.classList.add('is-opening');document.documentElement.classList.remove('opening-pending');
+    const chrome=[...document.querySelectorAll('.fable-top,.fable-dock,.cover-page .picture-header,.cover-page .picture-footer')];
+    const previousInert=chrome.map(el=>el.inert);chrome.forEach(el=>el.inert=true);
+    const original=frame.querySelector('img'),paperImage=new Image();paperImage.src='art/reading-leaf-v6-display.webp';
+    const artworkRatio=Number(frame.closest('[data-page]').style.getPropertyValue('--art-ratio'))||16/9;
+    original.sizes=Math.ceil(Math.max(innerWidth,innerHeight*artworkRatio))+'px';
+    let raf=0,water=null,clock=null;
+    openingCleanup=()=>{cancelAnimationFrame(raf);water?.dispose();chrome.forEach((el,i)=>{el.inert=previousInert[i];el.style.removeProperty('opacity')});};
+    layer.querySelector('.opening-skip').onclick=()=>{stopOpening();$('#replay').focus({preventScroll:true})};
+    const cancelled=()=>request!==openingRequest||quiet()||!layer.isConnected;
+    await new Promise(requestAnimationFrame);if(cancelled())return;
+    await Promise.race([Promise.allSettled([original.decode(),paperImage.decode(),document.fonts?.ready]),new Promise(resolve=>setTimeout(resolve,3500))]);
+    if(cancelled())return;
+    // A failed display image must never leave a full-screen curtain over the site.
+    if(!original.complete||!original.naturalWidth){stopOpening();return}
+    preparePicture(0);
+    const width=innerWidth,height=innerHeight,target=frame.getBoundingClientRect(),chromeBounds=chrome.map(el=>el.getBoundingClientRect());
+    const paper=layer.querySelector('.opening-paper'),canvas=paper.querySelector('canvas'),inscription=paper.querySelector('.opening-inscription');
+    const shell=layer.querySelector('.opening-art-shell'),art=new Image();art.src=original.currentSrc||original.src;art.alt='';shell.append(art);
+    await art.decode().catch(()=>{});if(cancelled())return;
+    if(paperImage.naturalWidth)water=createOpeningWater(canvas,paperImage,width,height);
+    if(!water)canvas.hidden=true;else layer.dataset.renderer='water-refraction';
+    const waves=[...paper.querySelectorAll('.opening-wave')];if(water)waves.forEach(el=>el.hidden=true);
+    const clamp=(value)=>Math.min(1,Math.max(0,value));const smooth=value=>{const x=clamp(value);return x*x*(3-2*x)};
+    let previousWater=-1;
+    function draw(){
+      if(cancelled())return;
+      const time=Number(clock.currentTime)||0;
+      const ripple=clamp((time-2000)/1350),reveal=smooth((time-3350)/550),shrink=smooth((time-4350)/1500);
+      layer.dataset.phase=time<350?'blank':time<1000?'inscription':time<2000?'hold':time<3350?'ripple':time<3900?'reveal':time<4350?'full-art':'settle';
+      inscription.style.opacity=smooth((time-350)/650)*(1-smooth((time-2000)/450));
+      if(water&&ripple!==previousWater){if(!water.draw(ripple)){water.dispose();water=null;canvas.hidden=true;waves.forEach(el=>el.hidden=false)}previousWater=ripple}
+      if(!water)waves.forEach((el,i)=>{const p=clamp(ripple-i*.08);const diameter=Math.hypot(width,height)*p*1.14;el.style.width=el.style.height=diameter+'px';el.style.opacity=smooth(p/.12)*(1-smooth((p-.55)/.4))*(i?.26:.5)});
+      paper.style.opacity=1-reveal;shell.style.opacity=reveal;
+      const top=target.top*shrink,bottom=top+height+(target.height-height)*shrink;
+      shell.style.left=target.left*shrink+'px';shell.style.top=top+'px';
+      shell.style.width=(width+(target.width-width)*shrink)+'px';shell.style.height=(bottom-top)+'px';
+      shell.style.borderRadius=3*shrink+'px';art.style.objectPosition=(width<800?70-20*shrink:50)+'% 50%';
+      // Reveal each text block only after the moving artwork clears its entire bounds.
+      chrome.forEach((el,i)=>{const r=chromeBounds[i];el.style.opacity=smooth(r.bottom<=target.top?(top-r.bottom)/Math.max(1,target.top-r.bottom):(r.top-bottom)/Math.max(1,r.top-target.bottom));});
+      layer.querySelector('.opening-skip').style.opacity=1-smooth((time-4350)/400);
+      raf=requestAnimationFrame(draw);
+    }
+    clock=animatePart(layer,[{opacity:1},{opacity:1}],{duration:5850,easing:'linear',fill:'both'});clock.id='sylvie-water-opening';draw();
+    clock.finished.then(()=>{if(!cancelled())stopOpening()},()=>{});
+  }
   const theme='fable',horizontal=false;
   const rail=$('#fable-rail'),panels=[...document.querySelectorAll('[data-page]')];
   let currentPage=0,scrollFrame=0,wheelSum=0,lastWheel=0,wheelLock=0,quietPreference=false,resizeTimer;
   const running=new Set();
-  let openingRequest=0,openingLayer=null;
+  let openingRequest=0,openingLayer=null,openingCleanup=null;
   function stopOpening(){
     openingRequest++;
     for(const a of running)a.cancel();
+    openingCleanup?.();openingCleanup=null;
     openingLayer?.remove();openingLayer=null;
     document.body.classList.remove('is-opening');
+    document.documentElement.classList.remove('opening-pending');
   }
   const quiet=()=>reduced.matches||quietPreference;
   const pictureJobs=new Map();
@@ -294,13 +395,15 @@
     if(Math.abs(wheelSum)>=170){const direction=Math.sign(wheelSum);wheelSum=0;wheelLock=now+(quiet()?160:650);goFable(currentPage+direction);}
   },{passive:false});
   document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&openingLayer){stopOpening();$('#replay').focus({preventScroll:true});return;}
     if(e.target.closest('input,textarea,select,[contenteditable=true]')||document.querySelector('dialog[open]'))return;
     if(e.key==='ArrowRight'){e.preventDefault();goFable(currentPage+1);}
     if(e.key==='ArrowLeft'){e.preventDefault();goFable(currentPage-1);}
     if(e.key==='Home'&&e.target.closest('.fable-dock')){e.preventDefault();goFable(0);}
     if(e.key==='End'&&e.target.closest('.fable-dock')){e.preventDefault();goFable(6);}
   });
-  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>goFable(currentPage,false),100);},{passive:true});
+  window.addEventListener('resize',()=>{if(openingLayer)stopOpening();clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>goFable(currentPage,false),100);},{passive:true});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden&&openingLayer)stopOpening();});
   window.addEventListener('hashchange',()=>goFable(readHash()));
   $('#motion-toggle').addEventListener('click',()=>{quietPreference=!quietPreference;try{localStorage.setItem('sylvie-reduced-motion',String(quietPreference));}catch{}applyMotionPreference();});
   reduced.addEventListener('change',applyMotionPreference);applyMotionPreference();
@@ -308,18 +411,11 @@
     stopOpening();goFable(0,false);
     if(quiet())return;
     const request=openingRequest,frame=$('.cover-page .picture-window');
-    // One attached cover and rolled edge share one timeline; the artwork and surrounding type stay still.
-    const layer=document.createElement('div');layer.className='unroll-layer';layer.setAttribute('aria-hidden','true');
-    layer.innerHTML='<div class="unroll-paper"><div class="unroll-inscription"><span>初见</span><small>与君相逢 · 听此一曲</small></div><i class="unroll-spine"></i></div>';
-    openingLayer=layer;frame.append(layer);document.body.classList.add('is-opening');
-    await Promise.race([preparePicture(0),new Promise(resolve=>setTimeout(resolve,3500))]);
-    if(request!==openingRequest||quiet())return;
-    const finish=animatePart(layer.querySelector('.unroll-paper'),[{transform:'translateX(0)'},{transform:'translateX(102%)'}],{duration:2400,delay:350,easing:'cubic-bezier(.42,0,.28,1)',fill:'both'});
-    finish?.finished.then(()=>{if(request===openingRequest){layer.remove();openingLayer=null;document.body.classList.remove('is-opening');}},()=>{});
+    try{await startWaterOpening(frame,request)}catch{if(request===openingRequest)stopOpening()}
   }
   $('#replay').addEventListener('click',playOpening);
   goFable(readHash(),false);
-  try{if(!sessionStorage.getItem('sylvie-fable-seen')&&readHash()===0)playOpening();sessionStorage.setItem('sylvie-fable-seen','1');}catch{}
+  try{if(!sessionStorage.getItem('sylvie-water-entry-v14-seen')&&readHash()===0)playOpening();sessionStorage.setItem('sylvie-water-entry-v14-seen','1');}catch{if(readHash()===0)playOpening()}
   document.querySelectorAll('dialog .dialog-close').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();b.closest('dialog').close();}));
 
 })();
