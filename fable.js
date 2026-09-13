@@ -9,7 +9,7 @@
   const cloudEndpoint=document.documentElement.dataset.catalogEndpoint||'',cloudCacheKey='sylvie-cloud-catalog-v1';
   let cloudRequest=null,lastCloudRefresh=0,cloudRevision=0;
   const WEEK=7*24*60*60*1000,pageSize=20;
-  const bookmark='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>';
+  const bookmark='<span class="ui-icon" data-icon="bookmark-simple" aria-hidden="true"></span>';
   let songs=[],selected=null,view='all',language='',style='',candidate=null,page=0,feedbackTimer,candidateTurn=0;
   let media=[],recent=[];
   const saved=new Set();
@@ -20,9 +20,10 @@
   readViewer();
   const isNew=s=>Number.isFinite(s.createdAt)&&Date.now()>=s.createdAt&&Date.now()-s.createdAt<WEEK;
   const songNumber=s=>String(songs.indexOf(s)+1).padStart(3,'0');
+  const styleTerms=s=>String(s.style||'').split('/').map(x=>x.trim()).filter(Boolean);
   function matches(){
     const query=search.value.trim().normalize('NFKC').toLocaleLowerCase();
-    const list=songs.filter(s=>!s.deletedAt&&(view!=='saved'||saved.has(String(s.id)))&&(view!=='recent'||recent.some(x=>x.id===String(s.id)))&&(view!=='new'||isNew(s))&&(!language||s.language===language)&&(!style||s.style===style)&&(!query||`${s.name} ${s.singer} ${songNumber(s)}`.normalize('NFKC').toLocaleLowerCase().includes(query)));
+    const list=songs.filter(s=>!s.deletedAt&&(view!=='saved'||saved.has(String(s.id)))&&(view!=='recent'||recent.some(x=>x.id===String(s.id)))&&(view!=='new'||isNew(s))&&(!language||s.language===language)&&(!style||styleTerms(s).includes(style))&&(!query||`${s.name} ${s.singer} ${songNumber(s)}`.normalize('NFKC').toLocaleLowerCase().includes(query)));
     return list.sort((a,b)=>view==='recent'?recent.findIndex(x=>x.id===String(a.id))-recent.findIndex(x=>x.id===String(b.id)):Number(isNew(b))-Number(isNew(a))||(isNew(a)?b.createdAt-a.createdAt:(a.order??songs.indexOf(a))-(b.order??songs.indexOf(b))));
   }
   function make(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;}
@@ -32,7 +33,7 @@
     feedback.getAnimations?.().forEach(a=>a.cancel());
     if(!reduced.matches&&!document.body.classList.contains('static-mode'))feedback.animate([{transform:'translate(-50%,6px)',opacity:0},{transform:'translate(-50%,0)',opacity:1}],{duration:200,easing:'ease-out'});
   }
-  function recordChoice(song,notify=true){const changed=selected!==String(song.id);selected=String(song.id);recent=[{id:String(song.id),at:Date.now()},...recent.filter(x=>x.id!==String(song.id))].slice(0,30);saveViewer();const index=matches().findIndex(s=>String(s.id)===selected);if(index>=0)page=Math.floor(index/pageSize);render();if(notify)showSlip(song);else{feedback.hidden=true;clearTimeout(feedbackTimer);}const row=[...rows.children].find(r=>r.dataset.song===selected);row?.scrollIntoView({block:'nearest',behavior:reduced.matches||document.body.classList.contains('static-mode')?'instant':'smooth'});const button=row?.querySelector('.select-song');button?.focus({preventScroll:true});if(changed&&button&&!reduced.matches&&!document.body.classList.contains('static-mode')){const leaf=button.querySelector('.request-token');leaf?.animate([{transform:'rotateY(0deg)'},{transform:'rotateY(-180deg)'}],{duration:760,easing:'cubic-bezier(.4,0,.2,1)'});}}
+  function recordChoice(song,notify=true){selected=String(song.id);recent=[{id:String(song.id),at:Date.now()},...recent.filter(x=>x.id!==String(song.id))].slice(0,30);saveViewer();const index=matches().findIndex(s=>String(s.id)===selected);if(index>=0)page=Math.floor(index/pageSize);render();if(notify)showSlip(song);else{feedback.hidden=true;clearTimeout(feedbackTimer);}const row=[...rows.children].find(r=>r.dataset.song===selected);row?.scrollIntoView({block:'nearest',behavior:reduced.matches||document.body.classList.contains('static-mode')?'instant':'smooth'});row?.querySelector('.select-song')?.focus({preventScroll:true});}
   function legacyCopy(text){
     const previous=document.activeElement,selection=window.getSelection(),ranges=[];
     for(let i=0;i<(selection?.rangeCount||0);i++)ranges.push(selection.getRangeAt(i).cloneRange());
@@ -72,25 +73,26 @@
       if(isNew(song))title.append(make('small','new-badge','NEW'));
       names.append(title,make('span','artist',song.singer));
       const clip=media.find(m=>m.songName===song.name);
-      if(clip){const preview=make('a','song-preview','看演唱 ↗');preview.href=clip.url;preview.target='_blank';preview.rel='noreferrer';names.append(preview);}
+      if(clip){const preview=make('a','song-preview','看演唱 ');const icon=make('span','ui-icon');icon.dataset.icon='arrow-up-right';icon.setAttribute('aria-hidden','true');preview.append(icon);preview.href=clip.url;preview.target='_blank';preview.rel='noreferrer';names.append(preview);}
       const favorite=make('button','favorite');favorite.type='button';favorite.innerHTML=bookmark;
       favorite.setAttribute('aria-pressed',String(saved.has(id)));favorite.setAttribute('aria-label',(saved.has(id)?'取消收藏 ':'收藏 ')+song.name);
       favorite.addEventListener('click',()=>{saved.has(id)?saved.delete(id):saved.add(id);saveViewer();render();const target=[...rows.querySelectorAll('.track')].find(e=>e.dataset.song===id)?.querySelector('.favorite')||$('[data-view="'+view+'"]');target?.focus({preventScroll:true});});
       const select=make('button','select-song');select.type='button';select.setAttribute('aria-label',(selected===id?'已选，重新复制点歌 ':'复制点歌 ')+song.name);select.setAttribute('aria-pressed',String(selected===id));
-      const token=make('span','request-token');token.setAttribute('aria-hidden','true');
-      const front=make('span','token-face token-blue'),back=make('span','token-face token-red');front.dataset.label='点歌';back.dataset.label='已选';token.append(front,back);select.append(token,make('span','sr-only',selected===id?'已选':'点歌'));select.addEventListener('click',()=>choose(song));
+      select.append(make('span','request-label',selected===id?'已选':'点歌'));select.addEventListener('click',()=>choose(song));
       row.append(number,names,favorite,select);rows.append(row);
     }
     document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
   }
   function updateFilters(){
     document.querySelectorAll('[data-field]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.field==='language'?language:style)===b.dataset.value)));
-    $('#filter-label').textContent=language||style?[language,style].filter(Boolean).join(' · '):'筛选';
+    const count=[language,style].filter(Boolean).length;
+    $('#filter-label').textContent=count?'筛选 · '+count:'筛选';
+    const selection=$('#filter-selection');if(selection){selection.textContent=[language,style].filter(Boolean).join(' / ')||'全部语言与曲风';selection.dataset.active=String(!!count);}
   }
   function setupFilters(){
     for(const field of ['language','style']){
       const target=$('#'+field+'-choices');target.replaceChildren();
-      for(const value of ['',...new Set(songs.filter(s=>!s.deletedAt).map(s=>s[field]).filter(Boolean))]){
+      for(const value of ['',...new Set(songs.filter(s=>!s.deletedAt).flatMap(s=>field==='style'?styleTerms(s):[s[field]]).filter(Boolean))]){
         const b=make('button','',value||'全部');b.type='button';b.dataset.field=field;b.dataset.value=value;
         b.addEventListener('click',()=>{if(field==='language')language=value;else style=value;page=0;updateFilters();render();});target.append(b);
       }
@@ -119,6 +121,17 @@
   $('#page-prev').addEventListener('click',()=>{page--;render();$('#catalog').scrollIntoView({block:'start'});});
   $('#page-next').addEventListener('click',()=>{page++;render();$('#catalog').scrollIntoView({block:'start'});});
   document.addEventListener('pointerdown',e=>{if(!$('.filter').contains(e.target))$('.filter').open=false;});
+  function fitFilterPanel(){
+    const details=$('.filter');if(!details.open)return;
+    const pop=details.querySelector('.filter-pop'),tools=details.closest('.tools'),scroller=details.closest('[data-inner-scroll]');
+    if(!scroller)return;
+    const bounds=scroller.getBoundingClientRect(),anchor=tools.getBoundingClientRect();
+    const below=bounds.bottom-anchor.bottom-20,above=anchor.top-bounds.top-20,up=below<210&&above>below;
+    pop.style.top=up?'auto':'calc(100% + 9px)';pop.style.bottom=up?'calc(100% + 9px)':'auto';
+    pop.style.maxHeight=Math.max(100,Math.min(560,up?above:below))+'px';
+  }
+  $('.filter').addEventListener('toggle',fitFilterPanel);
+  window.addEventListener('resize',fitFilterPanel);
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&$('.filter').open){$('.filter').open=false;$('.filter summary').focus();}
     if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.target.closest('input,textarea,[contenteditable="true"]')&&!document.querySelector('dialog[open]')){e.preventDefault();if(horizontal)goChapter(1,false);if(theme==='atlas')goAtlas(2,false);if(theme==='fable')goFable(5,false);search.focus();}
@@ -155,8 +168,44 @@
   window.addEventListener('focus',()=>{if(Date.now()-lastCloudRefresh>15000)refreshCloudCatalog();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-lastCloudRefresh>15000)refreshCloudCatalog();});
   if(cloudEndpoint)setInterval(()=>{if(document.visibilityState==='visible')refreshCloudCatalog();},60000);
-  fetch('submissions.json').then(r=>r.json()).then(data=>{media=data;if(songs.length)render();}).catch(()=>{});
+  fetch('submissions.json').then(r=>r.json()).then(data=>{media=data;if(songs.length)render();if(typeof renderFilmGallery==='function')renderFilmGallery(data);}).catch(()=>{});
   loadCatalog();
+  function renderFilmGallery(clips){
+    const section=document.querySelector('.submission-section'),grid=section?.querySelector('.submission-grid');
+    if(!grid||!Array.isArray(clips))return;
+    let genre='全部',filmPage=0,query='';const perPage=12;
+    const categories=['全部','原创','翻唱','合唱','现场与片段','形象与纪念','趣味切片'];
+    const toolbar=make('div','film-toolbar'),nav=make('nav','film-categories');nav.setAttribute('aria-label','声映集分类');
+    const searchLabel=make('label','film-search'),input=make('input');input.type='search';input.placeholder='搜索作品或版本';input.setAttribute('aria-label','搜索声映集作品或版本');
+    const searchIcon=make('span','ui-icon');searchIcon.dataset.icon='magnifying-glass';searchIcon.setAttribute('aria-hidden','true');searchLabel.append(searchIcon,input);
+    toolbar.append(nav,searchLabel);grid.before(toolbar);
+    const status=make('p','film-result');status.setAttribute('role','status');toolbar.after(status);
+    const paging=make('nav','film-pagination');paging.setAttribute('aria-label','声映集分页');
+    const prev=make('button','','上一页'),pageLabel=make('span','num'),next=make('button','','下一页');prev.type=next.type='button';paging.append(prev,pageLabel,next);grid.after(paging);
+    for(const category of categories){const b=make('button','',category+' '+clips.filter(r=>category==='全部'||r.category===category).length);b.type='button';b.dataset.filmCategory=category;b.onclick=()=>{genre=category;filmPage=0;draw()};nav.append(b)}
+    input.addEventListener('input',()=>{query=input.value.trim().normalize('NFKC').toLowerCase();filmPage=0;draw()});
+    function icon(name){const e=make('span','ui-icon');e.dataset.icon=name;e.setAttribute('aria-hidden','true');return e}
+    function draw(){
+      const filtered=clips.filter(r=>(genre==='全部'||r.category===genre)&&[r.songName,r.title,r.version].join(' ').normalize('NFKC').toLowerCase().includes(query));
+      const pages=Math.max(1,Math.ceil(filtered.length/perPage));filmPage=Math.min(filmPage,pages-1);grid.replaceChildren();
+      nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filmCategory===genre)));
+      status.textContent=`${filtered.length} 部作品${filtered.length?` · 第 ${filmPage*perPage+1}–${Math.min(filtered.length,(filmPage+1)*perPage)} 部`:''}`;
+      if(!filtered.length)grid.append(make('p','film-empty','没有找到这部作品，试试歌名或其他分类。'));
+      for(const r of filtered.slice(filmPage*perPage,(filmPage+1)*perPage)){
+        const card=make('a','submission');card.href=r.url;card.target='_blank';card.rel='noreferrer';card.title=r.title;
+        card.setAttribute('aria-label',`${r.songName}${r.version?'，'+r.version:''}，在 B 站观看`);
+        const cover=make('div','submission-cover'),img=make('img');img.src=r.cover;img.width=640;img.height=360;img.loading='lazy';img.decoding='async';img.alt=r.songName+'投稿封面';
+        const play=make('span','submission-play');play.append(icon('play'));play.setAttribute('aria-hidden','true');
+        const duration=make('span','submission-duration num',r.durationText||`${Math.floor(r.duration/60)}:${String(r.duration%60).padStart(2,'0')}`);cover.append(img,play,duration);
+        const meta=make('div','submission-meta');meta.append(make('span','',r.category),make('time','',r.date||''));
+        const title=make('h3','',r.songName);title.append(icon('arrow-up-right'));
+        card.append(cover,meta,title,make('p','',r.version||r.owner||'希尔薇Sylvie'));grid.append(card);
+      }
+      paging.hidden=pages<=1;prev.disabled=filmPage===0;next.disabled=filmPage===pages-1;pageLabel.textContent=`${filmPage+1} / ${pages}`;
+    }
+    function turn(amount){filmPage+=amount;draw();section.closest('[data-inner-scroll]')?.scrollTo({top:toolbar.offsetTop-24,behavior:'instant'});(amount>0?(next.disabled?prev:next):(prev.disabled?next:prev)).focus({preventScroll:true})}
+    prev.onclick=()=>turn(-1);next.onclick=()=>turn(1);draw();
+  }
   const theme='fable',horizontal=false;
   const rail=$('#fable-rail'),panels=[...document.querySelectorAll('[data-page]')];
   let currentPage=0,scrollFrame=0,wheelSum=0,lastWheel=0,wheelLock=0,quietPreference=false;
@@ -259,17 +308,13 @@
     stopOpening();goFable(0,false);
     if(quiet())return;
     const request=openingRequest,frame=$('.cover-page .picture-window');
-    // The picture is always present underneath. A physical paper leaf opens over it;
-    // no loading-dependent reveal, opacity ramp or clipped original image is used.
+    // One attached cover and rolled edge share one timeline; the artwork and surrounding type stay still.
     const layer=document.createElement('div');layer.className='unroll-layer';layer.setAttribute('aria-hidden','true');
-    layer.innerHTML='<div class="unroll-paper"><div class="unroll-inscription"><span>希尔薇 <em>Sylvie</em></span><small>一卷画境 · 与你相逢</small></div><i class="unroll-spine"></i></div><svg class="unroll-cord" viewBox="0 0 1200 140" preserveAspectRatio="none"><path pathLength="1" d="M-40 92 C180 104 280 44 400 72 S650 138 810 72 S1050 26 1240 58"/></svg>';
+    layer.innerHTML='<div class="unroll-paper"><div class="unroll-inscription"><span>初见</span><small>与君相逢 · 听此一曲</small></div><i class="unroll-spine"></i></div>';
     openingLayer=layer;frame.append(layer);document.body.classList.add('is-opening');
-    const easing='cubic-bezier(.42,0,.16,1)';
-    animatePart(layer.querySelector('path'),[{strokeDashoffset:1},{strokeDashoffset:0}],{duration:1050,easing:'cubic-bezier(.4,0,.4,1)',fill:'both'});
-    const finish=animatePart(layer.querySelector('.unroll-paper'),[{transform:'translateX(0)'},{transform:'translateX(103%)'}],{duration:2000,delay:550,easing,fill:'both'});
-    animatePart(layer.querySelector('.unroll-cord'),[{transform:'translateX(0)'},{transform:'translateX(108%)'}],{duration:1700,delay:1000,easing,fill:'both'});
-    animatePart($('.cover-page .picture-header'),[{transform:'translateX(-24px)'},{transform:'translateX(0)'}],{duration:1700,easing,fill:'backwards'});
-    animatePart($('.cover-page .picture-footer'),[{transform:'perspective(900px) rotateX(12deg) translateY(18px)'},{transform:'perspective(900px) rotateX(0deg) translateY(0)'}],{duration:1200,delay:1450,easing,fill:'backwards'});
+    await Promise.race([preparePicture(0),new Promise(resolve=>setTimeout(resolve,3500))]);
+    if(request!==openingRequest||quiet())return;
+    const finish=animatePart(layer.querySelector('.unroll-paper'),[{transform:'translateX(0)'},{transform:'translateX(102%)'}],{duration:2400,delay:350,easing:'cubic-bezier(.42,0,.28,1)',fill:'both'});
     finish?.finished.then(()=>{if(request===openingRequest){layer.remove();openingLayer=null;document.body.classList.remove('is-opening');}},()=>{});
   }
   $('#replay').addEventListener('click',playOpening);
