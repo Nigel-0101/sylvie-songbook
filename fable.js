@@ -208,7 +208,7 @@
   }
   const theme='fable',horizontal=false;
   const rail=$('#fable-rail'),panels=[...document.querySelectorAll('[data-page]')];
-  let currentPage=0,scrollFrame=0,wheelSum=0,lastWheel=0,wheelLock=0,quietPreference=false;
+  let currentPage=0,scrollFrame=0,wheelSum=0,lastWheel=0,wheelLock=0,quietPreference=false,resizeTimer;
   const running=new Set();
   let openingRequest=0,openingLayer=null;
   function stopOpening(){
@@ -269,6 +269,7 @@
     scrollFrame=0;
   }
   function goFable(index,animate=true){
+    clearTimeout(resizeTimer);
     index=Math.max(0,Math.min(panels.length-1,index));
     if(index!==0)stopOpening();
     currentPage=index;wheelSum=0;
@@ -299,7 +300,6 @@
     if(e.key==='Home'&&e.target.closest('.fable-dock')){e.preventDefault();goFable(0);}
     if(e.key==='End'&&e.target.closest('.fable-dock')){e.preventDefault();goFable(6);}
   });
-  let resizeTimer;
   window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>goFable(currentPage,false),100);},{passive:true});
   window.addEventListener('hashchange',()=>goFable(readHash()));
   $('#motion-toggle').addEventListener('click',()=>{quietPreference=!quietPreference;try{localStorage.setItem('sylvie-reduced-motion',String(quietPreference));}catch{}applyMotionPreference();});
