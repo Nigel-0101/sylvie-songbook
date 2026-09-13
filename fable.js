@@ -6,6 +6,8 @@
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const rows=$('#rows'),search=$('#search'),feedback=$('#feedback');
   const viewerKey='sylvie-songbook-viewer-v1',catalogKey='vv-songbook-preview-v1';
+  const cloudEndpoint=document.documentElement.dataset.catalogEndpoint||'',cloudCacheKey='sylvie-cloud-catalog-v1';
+  let cloudRequest=null,lastCloudRefresh=0,cloudRevision=0;
   const WEEK=7*24*60*60*1000,pageSize=20;
   const bookmark='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>';
   let songs=[],selected=null,view='all',language='',style='',candidate=null,page=0,feedbackTimer,candidateTurn=0;
@@ -30,7 +32,7 @@
     feedback.getAnimations?.().forEach(a=>a.cancel());
     if(!reduced.matches&&!document.body.classList.contains('static-mode'))feedback.animate([{transform:'translate(-50%,6px)',opacity:0},{transform:'translate(-50%,0)',opacity:1}],{duration:200,easing:'ease-out'});
   }
-  function recordChoice(song,notify=true){selected=String(song.id);recent=[{id:String(song.id),at:Date.now()},...recent.filter(x=>x.id!==String(song.id))].slice(0,30);saveViewer();const index=matches().findIndex(s=>String(s.id)===selected);if(index>=0)page=Math.floor(index/pageSize);render();if(notify)showSlip(song);else{feedback.hidden=true;clearTimeout(feedbackTimer);}const row=[...rows.children].find(r=>r.dataset.song===selected);row?.scrollIntoView({block:'nearest',behavior:reduced.matches||document.body.classList.contains('static-mode')?'instant':'smooth'});row?.querySelector('.select-song')?.focus({preventScroll:true});}
+  function recordChoice(song,notify=true){const changed=selected!==String(song.id);selected=String(song.id);recent=[{id:String(song.id),at:Date.now()},...recent.filter(x=>x.id!==String(song.id))].slice(0,30);saveViewer();const index=matches().findIndex(s=>String(s.id)===selected);if(index>=0)page=Math.floor(index/pageSize);render();if(notify)showSlip(song);else{feedback.hidden=true;clearTimeout(feedbackTimer);}const row=[...rows.children].find(r=>r.dataset.song===selected);row?.scrollIntoView({block:'nearest',behavior:reduced.matches||document.body.classList.contains('static-mode')?'instant':'smooth'});const button=row?.querySelector('.select-song');button?.focus({preventScroll:true});if(changed&&button&&!reduced.matches&&!document.body.classList.contains('static-mode')){const leaf=button.querySelector('.request-token');leaf?.animate([{transform:'rotateY(0deg)'},{transform:'rotateY(-180deg)'}],{duration:760,easing:'cubic-bezier(.4,0,.2,1)'});}}
   function legacyCopy(text){
     const previous=document.activeElement,selection=window.getSelection(),ranges=[];
     for(let i=0;i<(selection?.rangeCount||0);i++)ranges.push(selection.getRangeAt(i).cloneRange());
@@ -74,7 +76,9 @@
       const favorite=make('button','favorite');favorite.type='button';favorite.innerHTML=bookmark;
       favorite.setAttribute('aria-pressed',String(saved.has(id)));favorite.setAttribute('aria-label',(saved.has(id)?'取消收藏 ':'收藏 ')+song.name);
       favorite.addEventListener('click',()=>{saved.has(id)?saved.delete(id):saved.add(id);saveViewer();render();const target=[...rows.querySelectorAll('.track')].find(e=>e.dataset.song===id)?.querySelector('.favorite')||$('[data-view="'+view+'"]');target?.focus({preventScroll:true});});
-      const select=make('button','select-song',selected===id?'已选':'点歌');select.type='button';select.setAttribute('aria-label','复制点歌 '+song.name);select.addEventListener('click',()=>choose(song));
+      const select=make('button','select-song');select.type='button';select.setAttribute('aria-label',(selected===id?'已选，重新复制点歌 ':'复制点歌 ')+song.name);select.setAttribute('aria-pressed',String(selected===id));
+      const token=make('span','request-token');token.setAttribute('aria-hidden','true');
+      const front=make('span','token-face token-blue'),back=make('span','token-face token-red');front.dataset.label='点歌';back.dataset.label='已选';token.append(front,back);select.append(token,make('span','sr-only',selected===id?'已选':'点歌'));select.addEventListener('click',()=>choose(song));
       row.append(number,names,favorite,select);rows.append(row);
     }
     document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
@@ -126,17 +130,44 @@
   window.addEventListener('storage',e=>{if(e.key===viewerKey){readViewer();render();}if(e.key===catalogKey)loadCatalog();});
   async function loadCatalog(){
     try{
+      if(cloudEndpoint){
+        let cached=null;try{cached=JSON.parse(localStorage.getItem(cloudCacheKey)||'null');}catch{}
+        const snapshot=validCloudCatalog(cached)?cached.songs:await fetch('./songs.json').then(r=>{if(!r.ok)throw Error();return r.json();});
+        songs=snapshot;cloudRevision=validCloudCatalog(cached)?cached.revision:0;setupFilters();render();refreshCloudCatalog();return;
+      }
       let data=null;try{const stored=localStorage.getItem(catalogKey);if(stored)data=JSON.parse(stored);}catch{/* Read the source catalogue even if storage is blocked or malformed. */}
       if(!Array.isArray(data))data=await fetch('./songs.json').then(r=>{if(!r.ok)throw Error();return r.json();});
       if(!Array.isArray(data))throw Error();songs=data;setupFilters();render();
     }catch{$('#empty').hidden=false;$('#empty-message').textContent='歌单暂时无法读取，请刷新页面。';$('#random').disabled=true;}
   }
+  function validCloudCatalog(data){return data&&Number.isInteger(data.revision)&&data.revision>0&&Array.isArray(data.songs)&&data.songs.length<=5000&&data.songs.every(s=>s&&s.id!=null&&typeof s.name==='string'&&(s.singer==null||typeof s.singer==='string'));}
+  async function refreshCloudCatalog(){
+    if(!cloudEndpoint||cloudRequest||document.querySelector('dialog[open]'))return;
+    lastCloudRefresh=Date.now();const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+    cloudRequest=controller;
+    try{
+      const response=await fetch(cloudEndpoint,{credentials:'omit',cache:'no-store',signal:controller.signal});if(!response.ok)throw Error();
+      const data=await response.json();if(!validCloudCatalog(data))throw Error();
+      if(data.revision!==cloudRevision&&!document.querySelector('dialog[open]')){songs=data.songs;cloudRevision=data.revision;if(selected&&!songs.some(s=>String(s.id)===selected&&!s.deletedAt))selected=null;setupFilters();render();try{localStorage.setItem(cloudCacheKey,JSON.stringify(data));}catch{}}
+    }catch{/* Keep the most recently available catalogue when the connection is unavailable. */}
+    finally{clearTimeout(timer);cloudRequest=null;}
+  }
+  window.addEventListener('focus',()=>{if(Date.now()-lastCloudRefresh>15000)refreshCloudCatalog();});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-lastCloudRefresh>15000)refreshCloudCatalog();});
+  if(cloudEndpoint)setInterval(()=>{if(document.visibilityState==='visible')refreshCloudCatalog();},60000);
   fetch('submissions.json').then(r=>r.json()).then(data=>{media=data;if(songs.length)render();}).catch(()=>{});
   loadCatalog();
   const theme='fable',horizontal=false;
   const rail=$('#fable-rail'),panels=[...document.querySelectorAll('[data-page]')];
   let currentPage=0,scrollFrame=0,wheelSum=0,lastWheel=0,wheelLock=0,quietPreference=false;
   const running=new Set();
+  let openingRequest=0,openingLayer=null;
+  function stopOpening(){
+    openingRequest++;
+    for(const a of running)a.cancel();
+    openingLayer?.remove();openingLayer=null;
+    document.body.classList.remove('is-opening');
+  }
   const quiet=()=>reduced.matches||quietPreference;
   const pictureJobs=new Map();
   function preparePicture(index){
@@ -162,7 +193,7 @@
   function applyMotionPreference(){
     document.body.classList.toggle('static-mode',quiet());
     $('#motion-toggle').setAttribute('aria-pressed',String(quiet()));
-    if(quiet())for(const a of running){try{a.finish();}catch{}a.cancel();}
+    if(quiet())stopOpening();
     if(quiet())document.querySelectorAll('#feedback,#candidate-content>*').forEach(el=>el.getAnimations?.().forEach(a=>a.cancel()));
   }
   function animatePart(el,frames,options){
@@ -190,6 +221,7 @@
   }
   function goFable(index,animate=true){
     index=Math.max(0,Math.min(panels.length-1,index));
+    if(index!==0)stopOpening();
     currentPage=index;wheelSum=0;
     prepareNearby(index);
     rail.scrollTo({left:index*(rail.clientWidth||innerWidth),behavior:animate&&!quiet()?'smooth':'instant'});
@@ -223,14 +255,22 @@
   window.addEventListener('hashchange',()=>goFable(readHash()));
   $('#motion-toggle').addEventListener('click',()=>{quietPreference=!quietPreference;try{localStorage.setItem('sylvie-reduced-motion',String(quietPreference));}catch{}applyMotionPreference();});
   reduced.addEventListener('change',applyMotionPreference);applyMotionPreference();
-  let openingRequest=0;
   async function playOpening(){
-    const request=++openingRequest;
-    for(const a of running)a.cancel();
-    goFable(0,false);await preparePicture(0);if(quiet()||currentPage!==0||request!==openingRequest)return;
-    animatePart($('.cover-page .picture-window'),[{transform:'translateY(8px)',opacity:.7},{transform:'translateY(0)',opacity:1}],{duration:320});
-    animatePart($('.cover-identity'),[{transform:'translateY(4px)',opacity:.5},{transform:'translateY(0)',opacity:1}],{duration:240});
-    animatePart($('.cover-page .picture-footer'),[{transform:'translateY(4px)',opacity:.5},{transform:'translateY(0)',opacity:1}],{duration:240});
+    stopOpening();goFable(0,false);
+    if(quiet())return;
+    const request=openingRequest,frame=$('.cover-page .picture-window');
+    // The picture is always present underneath. A physical paper leaf opens over it;
+    // no loading-dependent reveal, opacity ramp or clipped original image is used.
+    const layer=document.createElement('div');layer.className='unroll-layer';layer.setAttribute('aria-hidden','true');
+    layer.innerHTML='<div class="unroll-paper"><div class="unroll-inscription"><span>希尔薇 <em>Sylvie</em></span><small>一卷画境 · 与你相逢</small></div><i class="unroll-spine"></i></div><svg class="unroll-cord" viewBox="0 0 1200 140" preserveAspectRatio="none"><path pathLength="1" d="M-40 92 C180 104 280 44 400 72 S650 138 810 72 S1050 26 1240 58"/></svg>';
+    openingLayer=layer;frame.append(layer);document.body.classList.add('is-opening');
+    const easing='cubic-bezier(.42,0,.16,1)';
+    animatePart(layer.querySelector('path'),[{strokeDashoffset:1},{strokeDashoffset:0}],{duration:1050,easing:'cubic-bezier(.4,0,.4,1)',fill:'both'});
+    const finish=animatePart(layer.querySelector('.unroll-paper'),[{transform:'translateX(0)'},{transform:'translateX(103%)'}],{duration:2000,delay:550,easing,fill:'both'});
+    animatePart(layer.querySelector('.unroll-cord'),[{transform:'translateX(0)'},{transform:'translateX(108%)'}],{duration:1700,delay:1000,easing,fill:'both'});
+    animatePart($('.cover-page .picture-header'),[{transform:'translateX(-24px)'},{transform:'translateX(0)'}],{duration:1700,easing,fill:'backwards'});
+    animatePart($('.cover-page .picture-footer'),[{transform:'perspective(900px) rotateX(12deg) translateY(18px)'},{transform:'perspective(900px) rotateX(0deg) translateY(0)'}],{duration:1200,delay:1450,easing,fill:'backwards'});
+    finish?.finished.then(()=>{if(request===openingRequest){layer.remove();openingLayer=null;document.body.classList.remove('is-opening');}},()=>{});
   }
   $('#replay').addEventListener('click',playOpening);
   goFable(readHash(),false);
