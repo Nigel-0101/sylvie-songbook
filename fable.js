@@ -6,7 +6,7 @@
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const rows=$('#rows'),search=$('#search'),feedback=$('#feedback');
   const viewerKey='sylvie-songbook-viewer-v1',catalogKey='vv-songbook-preview-v1';
-  const cloudEndpoint=document.documentElement.dataset.catalogEndpoint||'',cloudCacheKey='sylvie-cloud-catalog-v1';
+  const cloudEndpoint=document.documentElement.dataset.catalogEndpoint||'',cloudCacheKey='sylvie-cloud-catalog-v2:'+cloudEndpoint;
   let cloudRequest=null,lastCloudRefresh=0,cloudRevision=0;
   const WEEK=7*24*60*60*1000,pageSize=20;
   const bookmark='<span class="ui-icon" data-icon="bookmark-simple" aria-hidden="true"></span>';
@@ -159,7 +159,8 @@
     lastCloudRefresh=Date.now();const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
     cloudRequest=controller;
     try{
-      const response=await fetch(cloudEndpoint,{credentials:'omit',cache:'no-store',signal:controller.signal});if(!response.ok)throw Error();
+      const requestUrl=new URL(cloudEndpoint,location.href);requestUrl.searchParams.set('refresh',String(Math.floor(Date.now()/15000)));
+      const response=await fetch(requestUrl.href,{credentials:'omit',cache:'no-store',signal:controller.signal});if(!response.ok)throw Error();
       const data=await response.json();if(!validCloudCatalog(data))throw Error();
       if(data.revision!==cloudRevision&&!document.querySelector('dialog[open]')){songs=data.songs;cloudRevision=data.revision;if(selected&&!songs.some(s=>String(s.id)===selected&&!s.deletedAt))selected=null;setupFilters();render();try{localStorage.setItem(cloudCacheKey,JSON.stringify(data));}catch{}}
     }catch{/* Keep the most recently available catalogue when the connection is unavailable. */}
