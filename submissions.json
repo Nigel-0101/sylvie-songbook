@@ -1274,6 +1274,24 @@
     "status": "已核对链接"
   },
   {
+    "id": "selection-105",
+    "position": 105,
+    "source": "截图3·第4行第3列",
+    "bvid": "BV117EtzJErs",
+    "songName": "你若三冬",
+    "category": "翻唱",
+    "version": "戏腔DJ版",
+    "title": "⚡戏腔DJ抖腿⚡《你若三冬》",
+    "date": "2025-05-16",
+    "duration": 227,
+    "durationText": "03:47",
+    "owner": "希尔薇Sylvie",
+    "url": "https://www.bilibili.com/video/BV117EtzJErs/",
+    "cover_source": "https://i1.hdslb.com/bfs/archive/76ea08c2d6ae0d66c56383a3d3af384072df6aff.jpg",
+    "cover": "art/video-BV117EtzJErs.webp",
+    "status": "已核对链接"
+  },
+  {
     "id": "selection-106",
     "position": 106,
     "source": "截图3·第4行第4列",
@@ -1307,6 +1325,24 @@
     "url": "https://www.bilibili.com/video/BV1EZ5PzcEUm/",
     "cover_source": "https://i2.hdslb.com/bfs/archive/43d96ddb484ad8bc26e53c394502fb339bcb8032.jpg",
     "cover": "art/video-BV1EZ5PzcEUm.webp",
+    "status": "已核对链接"
+  },
+  {
+    "id": "selection-108",
+    "position": 108,
+    "source": "截图3·第4行第6列",
+    "bvid": "BV1rWV4zZEp4",
+    "songName": "时光定格",
+    "category": "原创",
+    "version": "",
+    "title": "【原创曲】《时光定格》“后来那一首情歌，是谁为你而唱呢”",
+    "date": "2025-05-07",
+    "duration": 188,
+    "durationText": "03:08",
+    "owner": "希尔薇Sylvie",
+    "url": "https://www.bilibili.com/video/BV1rWV4zZEp4/",
+    "cover_source": "https://i0.hdslb.com/bfs/archive/803b44edd3477b61fe102cf219a7eaa0dc847834.jpg",
+    "cover": "art/video-BV1rWV4zZEp4.webp",
     "status": "已核对链接"
   },
   {

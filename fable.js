@@ -169,7 +169,7 @@
   window.addEventListener('focus',()=>{if(Date.now()-lastCloudRefresh>15000)refreshCloudCatalog();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-lastCloudRefresh>15000)refreshCloudCatalog();});
   if(cloudEndpoint)setInterval(()=>{if(document.visibilityState==='visible')refreshCloudCatalog();},60000);
-  fetch('submissions.json?v=62d735294f0a').then(r=>r.json()).then(data=>{media=data;if(songs.length)render();if(typeof renderFilmGallery==='function')renderFilmGallery(data);}).catch(()=>{});
+  fetch('submissions.json?v=ce5ed29e2b1e').then(r=>r.json()).then(data=>{media=data;if(songs.length)render();if(typeof renderFilmGallery==='function')renderFilmGallery(data);}).catch(()=>{});
   loadCatalog();
   function renderFilmGallery(clips){
     const section=document.querySelector('.submission-section'),grid=section?.querySelector('.submission-grid');
