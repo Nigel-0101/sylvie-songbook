@@ -265,13 +265,17 @@
     const previousInert=chrome.map(el=>el.inert);chrome.forEach(el=>el.inert=true);
     const original=frame.querySelector('img'),paperImage=new Image();paperImage.src='art/reading-leaf-v6-display.webp';
     const artworkRatio=Number(frame.closest('[data-page]').style.getPropertyValue('--art-ratio'))||16/9;
-    original.sizes=Math.ceil(Math.max(innerWidth,innerHeight*artworkRatio))+'px';
+    // Keep the HTML preload's sizes: changing it after discovery can download
+    // a second variant of the same artwork (e.g. both 1920 and 1600 pixels).
     let raf=0,water=null,clock=null;
     openingCleanup=()=>{cancelAnimationFrame(raf);water?.dispose();chrome.forEach((el,i)=>{el.inert=previousInert[i];el.style.removeProperty('opacity')});};
     layer.querySelector('.opening-skip').onclick=()=>{stopOpening();$('#replay').focus({preventScroll:true})};
     const cancelled=()=>request!==openingRequest||quiet()||!layer.isConnected;
     await new Promise(requestAnimationFrame);if(cancelled())return;
-    await Promise.race([Promise.allSettled([original.decode(),paperImage.decode(),document.fonts?.ready]),new Promise(resolve=>setTimeout(resolve,3500))]);
+    // Only the opening's own glyphs can hold its playback clock. Song and film
+    // fonts load independently and must not extend the blank opening stage.
+    const inscriptionReady=document.fonts?.load('500 66px "Study Serif"','初见与君相逢听此一曲');
+    await Promise.race([Promise.allSettled([original.decode(),paperImage.decode(),inscriptionReady]),new Promise(resolve=>setTimeout(resolve,3500))]);
     if(cancelled())return;
     // A failed display image must never leave a full-screen curtain over the site.
     if(!original.complete||!original.naturalWidth){stopOpening();return}
@@ -280,6 +284,10 @@
     const paper=layer.querySelector('.opening-paper'),canvas=paper.querySelector('canvas'),inscription=paper.querySelector('.opening-inscription');
     const shell=layer.querySelector('.opening-art-shell'),art=new Image();art.src=original.currentSrc||original.src;art.alt='';shell.append(art);
     await art.decode().catch(()=>{});if(cancelled())return;
+    // The surrounding landscape is first visible during the final shrink.
+    // Start it now, while the unchanged inscription/ripple still covers it.
+    document.body.classList.add('opening-assets-ready');
+    document.documentElement.classList.remove('opening-resources');
     if(paperImage.naturalWidth)water=createOpeningWater(canvas,paperImage,width,height);
     if(!water)canvas.hidden=true;else layer.dataset.renderer='water-refraction';
     const waves=[...paper.querySelectorAll('.opening-wave')];if(water)waves.forEach(el=>el.hidden=true);
@@ -312,12 +320,14 @@
   const running=new Set();
   let openingRequest=0,openingLayer=null,openingCleanup=null;
   function stopOpening(){
+    const wasOpening=!!openingLayer;
     openingRequest++;
     for(const a of running)a.cancel();
     openingCleanup?.();openingCleanup=null;
     openingLayer?.remove();openingLayer=null;
-    document.body.classList.remove('is-opening');
-    document.documentElement.classList.remove('opening-pending');
+    document.body.classList.remove('is-opening','opening-assets-ready');
+    document.documentElement.classList.remove('opening-pending','opening-resources');
+    if(wasOpening)prepareNearby(currentPage);
   }
   const quiet=()=>reduced.matches||quietPreference;
   const pictureJobs=new Map();
@@ -338,7 +348,7 @@
     img.src=img.src;preparePicture(Number(button.closest('[data-page]').dataset.page));
   }));
   function prepareNearby(index){
-    preparePicture(index).then(()=>{if(currentPage===index){preparePicture(index-1);preparePicture(index+1);}});
+    preparePicture(index).then(()=>{setTimeout(()=>{if(currentPage===index&&!openingLayer){preparePicture(index-1);preparePicture(index+1);}},1200);});
   }
   try{quietPreference=localStorage.getItem('sylvie-reduced-motion')==='true';}catch{}
   function applyMotionPreference(){
@@ -356,6 +366,7 @@
     const width=rail.clientWidth||innerWidth;
     const previousPage=currentPage;
     currentPage=Math.max(0,Math.min(panels.length-1,Math.round(rail.scrollLeft/width)));
+    panels[currentPage].setAttribute('data-prepared','');
     if(previousPage!==currentPage)prepareNearby(currentPage);
     document.body.dataset.currentPage=String(currentPage);
     panels.forEach((p,i)=>p.inert=i!==currentPage);
@@ -373,6 +384,9 @@
   function goFable(index,animate=true){
     clearTimeout(resizeTimer);
     index=Math.max(0,Math.min(panels.length-1,index));
+    // Unhide every chapter the rail will pass before a smooth move starts.
+    if(animate&&!quiet())for(let i=Math.min(currentPage,index);i<=Math.max(currentPage,index);i++)panels[i].setAttribute('data-prepared','');
+    else panels[index].setAttribute('data-prepared','');
     if(index!==0)stopOpening();
     currentPage=index;wheelSum=0;
     prepareNearby(index);
@@ -409,13 +423,16 @@
   $('#motion-toggle').addEventListener('click',()=>{quietPreference=!quietPreference;try{localStorage.setItem('sylvie-reduced-motion',String(quietPreference));}catch{}applyMotionPreference();});
   reduced.addEventListener('change',applyMotionPreference);applyMotionPreference();
   async function playOpening(){
-    stopOpening();goFable(0,false);
+    stopOpening();
+    if(!quiet())document.documentElement.classList.add('opening-resources');
+    goFable(0,false);
     if(quiet())return;
     const request=openingRequest,frame=$('.cover-page .picture-window');
     try{await startWaterOpening(frame,request)}catch{if(request===openingRequest)stopOpening()}
   }
   $('#replay').addEventListener('click',playOpening);
   goFable(readHash(),false);
+  document.documentElement.setAttribute('data-chapters-ready','');
   try{if(!sessionStorage.getItem('sylvie-water-entry-v14-seen')&&readHash()===0)playOpening();sessionStorage.setItem('sylvie-water-entry-v14-seen','1');}catch{if(readHash()===0)playOpening()}
   document.querySelectorAll('dialog .dialog-close').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();b.closest('dialog').close();}));
 
