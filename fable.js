@@ -269,7 +269,38 @@
     // a second variant of the same artwork (e.g. both 1920 and 1600 pixels).
     let raf=0,water=null,clock=null;
     openingCleanup=()=>{cancelAnimationFrame(raf);water?.dispose();chrome.forEach((el,i)=>{el.inert=previousInert[i];el.style.removeProperty('opacity')});};
-    layer.querySelector('.opening-skip').onclick=()=>{stopOpening();$('#replay').focus({preventScroll:true})};
+    const skipOpening=()=>{stopOpening();$('#replay').focus({preventScroll:true})};
+    layer.querySelector('.opening-skip').onclick=skipOpening;
+    layer.addEventListener('dblclick',event=>{
+      if(event.button!==0)return;
+      event.preventDefault();event.stopPropagation();skipOpening();
+    });
+    // Touch browsers do not all emit dblclick. Recognize two short, nearby
+    // taps on this overlay only; swipes, long presses and pinches keep playing.
+    let touchStart=null,lastTap=null;
+    const resetTaps=()=>{touchStart=null;lastTap=null};
+    layer.addEventListener('touchstart',event=>{
+      if(event.touches.length!==1||event.target.closest('.opening-skip')){resetTaps();return;}
+      const touch=event.touches[0];
+      touchStart={id:touch.identifier,x:touch.clientX,y:touch.clientY,time:event.timeStamp};
+    },{passive:true});
+    layer.addEventListener('touchmove',event=>{
+      const touch=[...event.touches].find(t=>t.identifier===touchStart?.id);
+      if(!touch||Math.hypot(touch.clientX-touchStart.x,touch.clientY-touchStart.y)>24)resetTaps();
+    },{passive:true});
+    layer.addEventListener('touchcancel',resetTaps,{passive:true});
+    layer.addEventListener('touchend',event=>{
+      const touch=[...event.changedTouches].find(t=>t.identifier===touchStart?.id);
+      if(!touch||event.touches.length||event.timeStamp-touchStart.time>350){resetTaps();return;}
+      const tap={x:touch.clientX,y:touch.clientY,time:event.timeStamp};
+      const doubleTap=lastTap&&tap.time-lastTap.time<=350&&Math.hypot(tap.x-lastTap.x,tap.y-lastTap.y)<=24;
+      touchStart=null;lastTap=tap;
+      if(doubleTap){
+        // Cancel the compatibility click before removing the overlay so the
+        // second tap cannot activate a link underneath it.
+        event.preventDefault();event.stopPropagation();resetTaps();skipOpening();
+      }
+    },{passive:false});
     const cancelled=()=>request!==openingRequest||quiet()||!layer.isConnected;
     await new Promise(requestAnimationFrame);if(cancelled())return;
     // Only the opening's own glyphs can hold its playback clock. Song and film

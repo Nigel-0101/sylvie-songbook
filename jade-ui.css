@@ -139,7 +139,7 @@ button .ui-icon{pointer-events:none}
 @media(max-width:800px){.film-toolbar{gap:12px}.film-categories{flex-basis:100%;gap:4px}.film-categories button{font-size:12px;padding:7px 9px}.film-search{width:100%}.film-search input{width:100%}.submission-section .submission h3{font-size:23px}.film-pagination{gap:16px}.films-sheet{padding-inline:18px}.submission-section>header{align-items:center}}
 
 /* Full-screen water entry: one fixed stage, one playback clock. */
-.water-opening{position:fixed;inset:0;z-index:11000;overflow:hidden;isolation:isolate;pointer-events:auto}
+.water-opening{position:fixed;inset:0;z-index:11000;overflow:hidden;isolation:isolate;pointer-events:auto;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .opening-paper{position:absolute;inset:0;background:linear-gradient(90deg,rgba(231,237,227,.91),rgba(237,242,232,.86)),url('art/reading-leaf-v6-display.webp') 50% 47%/cover;z-index:2}
 .opening-paper canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .opening-paper canvas[hidden],.opening-wave[hidden]{display:none}
