@@ -348,6 +348,7 @@
   const theme='fable',horizontal=false;
   const rail=$('#fable-rail'),panels=[...document.querySelectorAll('[data-page]')];
   let currentPage=0,scrollFrame=0,wheelSum=0,lastWheel=0,wheelLock=0,quietPreference=false,resizeTimer;
+  let viewportWidth=innerWidth,viewportHeight=innerHeight;
   const running=new Set();
   let openingRequest=0,openingLayer=null,openingCleanup=null;
   function stopOpening(){
@@ -421,8 +422,12 @@
     if(index!==0)stopOpening();
     currentPage=index;wheelSum=0;
     prepareNearby(index);
-    rail.scrollTo({left:index*(rail.clientWidth||innerWidth),behavior:animate&&!quiet()?'smooth':'instant'});
-    if(!animate||quiet())syncRail();
+    const destination=index*(rail.clientWidth||innerWidth);
+    // A visitor can skip before the document finishes loading. Chromium can
+    // discard a smooth scroll at that point, so early navigation is immediate.
+    const smooth=animate&&!quiet()&&document.readyState==='complete';
+    rail.scrollTo({left:destination,behavior:smooth?'smooth':'instant'});
+    if(!smooth)syncRail();
     history.replaceState(null,'',index===5?'#catalog':'#chapter-'+index);
   }
   function readHash(){return location.hash==='#catalog'?5:Number(location.hash.replace('#chapter-',''))||0;}
@@ -448,7 +453,13 @@
     if(e.key==='Home'&&e.target.closest('.fable-dock')){e.preventDefault();goFable(0);}
     if(e.key==='End'&&e.target.closest('.fable-dock')){e.preventDefault();goFable(6);}
   });
-  window.addEventListener('resize',()=>{if(openingLayer)stopOpening();clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>goFable(currentPage,false),100);},{passive:true});
+  window.addEventListener('resize',()=>{
+    // Mobile browsers may send a startup resize without changing dimensions.
+    if(innerWidth===viewportWidth&&innerHeight===viewportHeight)return;
+    viewportWidth=innerWidth;viewportHeight=innerHeight;
+    if(openingLayer)stopOpening();
+    clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>goFable(currentPage,false),100);
+  },{passive:true});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&openingLayer)stopOpening();});
   window.addEventListener('hashchange',()=>goFable(readHash()));
   $('#motion-toggle').addEventListener('click',()=>{quietPreference=!quietPreference;try{localStorage.setItem('sylvie-reduced-motion',String(quietPreference));}catch{}applyMotionPreference();});
