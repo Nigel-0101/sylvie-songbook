@@ -155,3 +155,76 @@ body.is-opening .cover-page .picture-window{visibility:hidden}
 body.is-opening .fable-top,body.is-opening .fable-dock,body.is-opening .cover-page .picture-header,body.is-opening .cover-page .picture-footer{opacity:0}
 @media(max-width:800px){.opening-inscription{gap:23px}.opening-inscription>span{font-size:42px}.opening-inscription small{font-size:12px}.opening-skip{right:18px;bottom:max(18px,env(safe-area-inset-bottom))}}
 @media(prefers-reduced-motion:reduce){.water-opening{display:none}}
+/* Mobile v16: compact identity, readable song rows, separate film entries. */
+@media(max-width:800px){
+  .reading-page,.films-page{padding:10px 8px}
+  .reading-spread{border-radius:18px 4px 22px 4px}
+  .reading-leaf{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:10px;padding:12px 14px;align-items:center}
+  .reading-leaf .pair-avatar{width:48px;height:48px;padding:3px}
+  .reading-leaf .leaf-title{width:auto;margin:0;min-width:0}
+  .reading-leaf .leaf-title h2{font-size:25px;gap:8px;line-height:1.3}
+  .reading-leaf .leaf-title h2 em{font-size:13px}
+  .reading-leaf .leaf-title>p{font-size:12px;letter-spacing:.22em;margin-top:4px}
+  .reading-leaf .leaf-return{display:flex;align-items:center;gap:3px;min-height:44px;margin:0;font-size:10px;white-space:nowrap}
+  .reading-leaf .leaf-return .ui-icon{font-size:16px;margin:0}
+  .reading-content{padding:18px 16px 24px;scroll-padding-block:14px}
+  .catalog-heading{display:grid;grid-template-columns:minmax(0,1fr) 108px;align-items:center;gap:12px;margin-bottom:16px}
+  .catalog-heading .eyebrow{font-size:8px;letter-spacing:.15em;margin-bottom:7px}
+  .catalog-heading h2{font-size:23px;line-height:1.4;letter-spacing:0;text-wrap:balance}
+  .catalog-heading #random{width:108px;min-height:44px;padding:6px 9px;font-size:12px;gap:5px;letter-spacing:0}
+  #random .ui-icon{font-size:16px}
+  .search{min-height:48px;margin-top:0;padding-inline:12px;border-radius:5px 20px 20px 5px}
+  .search input{font-size:16px;padding-block:12px}
+  .search kbd{display:none}
+  .tools{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin-top:14px}
+  .views{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;min-width:0}
+  .views button{min-height:44px;padding:7px 2px;font-size:12px;white-space:nowrap}
+  .views .num{font-size:10px;margin-left:4px}
+  .filter>summary{min-height:44px;font-size:12px;padding:7px 9px;gap:5px}
+  .filter>summary .ui-icon{font-size:16px}
+  .filter-pop{max-height:52dvh;padding:16px 14px}
+  .track{grid-template-columns:24px minmax(0,1fr) 40px 78px;gap:7px;min-height:92px;padding:15px 0}
+  .track-number{font-size:10px;align-self:center}
+  .track strong{font-size:16px;line-height:1.5;overflow-wrap:anywhere}
+  .track .artist{font-size:12px;line-height:1.55;margin-top:4px;overflow-wrap:anywhere}
+  .track .favorite{width:40px;min-height:44px;padding:9px}
+  .track .select-song,.track.chosen .select-song{width:78px;min-height:44px;height:44px;padding-inline:10px;font-size:14px}
+  .track::before{inset:4px -6px;border-radius:4px}
+  .track.chosen::before{border-radius:4px}
+  .pagination{margin-top:16px;gap:20px}
+  .pagination button{min-width:44px;min-height:44px}
+  .sample-caption{font-size:10px;line-height:1.8;padding-inline:8px}
+  .films-sheet{padding:24px 18px;border-radius:4px 22px 4px 22px}
+  .submission-section h2{font-size:33px}
+  .film-search{min-height:44px}
+  .film-search input{font-size:16px}
+  .film-result{margin:16px 0 20px}
+  .submission-section .submission-grid{gap:0}
+  .submission-section .submission+.submission{border-top:1px solid #afc2b8;margin-top:24px;padding-top:24px}
+  .submission-section .submission h3{font-size:22px;line-height:1.45;margin-bottom:7px}
+  .submission-section .submission-meta{font-size:11px;margin-block:13px 8px}
+  .submission-section .submission>p{font-size:12px;line-height:1.65}
+  .film-pagination{margin-top:24px;padding-top:20px;gap:14px}
+  .film-pagination button{min-height:44px;padding-inline:16px}
+  .picture-load-state{right:10px;bottom:10px;font-size:11px;min-height:36px;padding:6px 11px}
+  .fable-dock{height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
+  .fable-rail{bottom:calc(62px + env(safe-area-inset-bottom))}
+}
+@media(max-width:360px){
+  .reading-leaf{grid-template-columns:42px minmax(0,1fr) auto;padding-inline:10px;gap:8px}
+  .reading-leaf .pair-avatar{width:42px;height:42px}
+  .reading-leaf .leaf-title h2{font-size:23px;gap:6px}
+  .reading-leaf .leaf-title h2 em{font-size:12px}
+  .reading-content{padding-inline:12px}
+  .catalog-heading{grid-template-columns:minmax(0,1fr) 98px;gap:9px}
+  .catalog-heading h2{font-size:21px}
+  .catalog-heading #random{width:98px;font-size:11px}
+  .views button{font-size:11px}.views .num{font-size:9px;margin-left:2px}
+  .track{grid-template-columns:21px minmax(0,1fr) 36px 70px;gap:5px}
+  .track .favorite{width:36px;padding-inline:7px}
+  .track .select-song,.track.chosen .select-song{width:70px;font-size:13px}
+  .track strong{font-size:15px}
+}
+@media(max-width:800px) and (hover:none){
+  .track:not(.chosen):hover::before{background:transparent}
+}
